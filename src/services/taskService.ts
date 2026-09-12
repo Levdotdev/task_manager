@@ -1,4 +1,3 @@
-// src/services/taskService.ts
 import { db, auth } from '@/firebase';
 import { ref as databaseRef, push, set, update, remove, onValue, type Unsubscribe } from 'firebase/database';
 

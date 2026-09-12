@@ -12,7 +12,7 @@
     </ion-button>
   </ion-buttons>
 
-  <ion-popover v-if="user" trigger="user-menu-trigger" trigger-action="click">
+  <ion-popover v-if="user" ref="popoverRef" trigger="user-menu-trigger" trigger-action="click">
     <ion-content class="ion-padding">
       <div class="profile-block">
         <ion-avatar class="profile-avatar">
@@ -25,8 +25,8 @@
 
       <OjtPieChart v-if="userRecord" :hours-remaining="userRecord.hoursRemaining" />
 
-      <ion-button expand="block" size="small" @click="showLogHoursAlert = true">Log Hours</ion-button>
-      <ion-button expand="block" fill="outline" color="danger" class="logout-btn" @click="showLogoutAlert = true">
+      <ion-button expand="block" size="small" @click="openLogHoursAlert">Log Hours</ion-button>
+      <ion-button expand="block" fill="outline" color="danger" class="logout-btn" @click="openLogoutAlert">
         <ion-icon slot="start" :icon="logOutIcon" />
         Log Out
       </ion-button>
@@ -34,9 +34,10 @@
   </ion-popover>
 
   <ion-alert
+    :key="logHoursAlertKey"
     :is-open="showLogHoursAlert"
     header="Log Hours Rendered"
-    :inputs="[{ name: 'hours', type: 'number', placeholder: 'Hours', min: 0 }]"
+    :inputs="[{ name: 'hours', type: 'number', placeholder: 'Hours', min: 0, value: 0 }]"
     :buttons="logHoursButtons"
     @didDismiss="showLogHoursAlert = false"
   />
@@ -61,6 +62,8 @@ const user = ref<User | null>(null);
 const userRecord = ref<UserRecord | null>(null);
 const showLogHoursAlert = ref(false);
 const showLogoutAlert = ref(false);
+const logHoursAlertKey = ref(0);
+const popoverRef = ref();
 let unsubscribeRecord: (() => void) | null = null;
 
 const stopAuthListener = onAuthChange((u) => {
@@ -73,6 +76,16 @@ const stopAuthListener = onAuthChange((u) => {
 onUnmounted(() => { stopAuthListener(); unsubscribeRecord?.(); });
 
 const handleSignIn = () => signInWithGoogle();
+
+const openLogHoursAlert = () => {
+  logHoursAlertKey.value++; // forces a fresh alert instance, so the input never keeps the last value
+  showLogHoursAlert.value = true;
+};
+
+const openLogoutAlert = () => {
+  popoverRef.value?.$el?.dismiss(); // close the dropdown before the confirm alert even shows
+  showLogoutAlert.value = true;
+};
 
 const logHoursButtons = [
   { text: 'Cancel', role: 'cancel' },

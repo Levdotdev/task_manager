@@ -1,4 +1,3 @@
-// src/services/userService.ts
 import { db, auth } from '@/firebase';
 import { ref as databaseRef, get, set, onValue, runTransaction, type Unsubscribe } from 'firebase/database';
 import { GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, type User } from 'firebase/auth';

@@ -2,7 +2,7 @@
   <ion-page>
     <ion-header>
       <ion-toolbar>
-        <ion-title>Daily Task Manager</ion-title>
+        <ion-title>OJT Task Manager</ion-title>
         <div slot="end" class="toolbar-end">
           <DarkModeToggle />
           <FirebaseConnectionComponent />

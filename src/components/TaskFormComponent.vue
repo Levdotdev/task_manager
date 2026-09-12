@@ -11,9 +11,9 @@
     </ion-item>
     <ion-item>
       <ion-select label="Priority" v-model="priority">
-        <ion-select-option value="low">Low</ion-select-option>
-        <ion-select-option value="medium">Medium</ion-select-option>
-        <ion-select-option value="high">High</ion-select-option>
+        <ion-select-option value="Low">Low</ion-select-option>
+        <ion-select-option value="Medium">Medium</ion-select-option>
+        <ion-select-option value="High">High</ion-select-option>
       </ion-select>
     </ion-item>
     <ion-item>

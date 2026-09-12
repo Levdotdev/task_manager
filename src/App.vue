@@ -4,7 +4,7 @@
 
     <ion-modal :is-open="showLoginModal" :backdrop-dismiss="false" class="login-modal">
       <div class="login-content">
-        <h2>Daily Task Manager</h2>
+        <h2>OJT Task Manager</h2>
         <p>Sign in to continue</p>
         <ion-button expand="block" @click="handleSignIn">
           <ion-icon slot="start" :icon="logoGoogleIcon" />
