@@ -1,6 +1,6 @@
 // src/services/taskService.ts
-import { db } from '@/firebase';
-import { ref as databaseRef, push, set, update, onValue, type Unsubscribe } from 'firebase/database';
+import { db, auth } from '@/firebase';
+import { ref as databaseRef, push, set, update, remove, onValue, type Unsubscribe } from 'firebase/database';
 
 export interface Task {
   id: string;
@@ -10,6 +10,9 @@ export interface Task {
   priority: 'low' | 'medium' | 'high';
   status: 'Pending' | 'Completed';
   image?: string;
+  link?: string;
+  fileName?: string;
+  fileData?: string;
 }
 
 export interface NewTask {
@@ -18,25 +21,37 @@ export interface NewTask {
   due_date: string;
   priority: 'low' | 'medium' | 'high';
   photoDataUrl?: string;
+  link?: string;
+  fileName?: string;
+  fileData?: string;
 }
 
-export interface TaskEdits {
-  title: string;
-  description: string;
-  due_date: string;
-  priority: 'low' | 'medium' | 'high';
-  photoDataUrl?: string;
+export interface TaskEdits extends NewTask {}
+
+function requireUid(): string {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Not signed in');
+  return uid;
+}
+function tasksRootRef() {
+  return databaseRef(db, `tasks/${requireUid()}`);
+}
+function taskRef(taskId: string) {
+  return databaseRef(db, `tasks/${requireUid()}/${taskId}`);
 }
 
 export async function addTask(task: NewTask) {
-  const newTaskRef = push(databaseRef(db, 'tasks'));
+  const newTaskRef = push(tasksRootRef());
   await set(newTaskRef, {
     title: task.title,
     description: task.description,
     due_date: task.due_date,
     priority: task.priority,
-    status: 'Pending', // always Pending on creation
+    status: 'Pending',
     image: task.photoDataUrl ?? '',
+    link: task.link ?? '',
+    fileName: task.fileName ?? '',
+    fileData: task.fileData ?? '',
   });
   return newTaskRef.key as string;
 }
@@ -49,20 +64,28 @@ export async function updateTask(taskId: string, edits: TaskEdits) {
     priority: edits.priority,
   };
   if (edits.photoDataUrl) updates.image = edits.photoDataUrl;
-  await update(databaseRef(db, `tasks/${taskId}`), updates);
+  if (edits.link !== undefined) updates.link = edits.link;
+  if (edits.fileName !== undefined) updates.fileName = edits.fileName;
+  if (edits.fileData !== undefined) updates.fileData = edits.fileData;
+  await update(taskRef(taskId), updates);
 }
 
 export async function markTaskCompleted(taskId: string) {
-  await update(databaseRef(db, `tasks/${taskId}`), { status: 'Completed' });
+  await update(taskRef(taskId), { status: 'Completed' });
+}
+export async function revertTaskToPending(taskId: string) {
+  await update(taskRef(taskId), { status: 'Pending' });
+}
+export async function deleteTask(taskId: string) {
+  await remove(taskRef(taskId));
 }
 
 export function subscribeToTasks(callback: (tasks: Task[]) => void): Unsubscribe {
-  const tasksRef = databaseRef(db, 'tasks');
-  return onValue(tasksRef, (snapshot) => {
+  return onValue(tasksRootRef(), (snapshot) => {
     const data = snapshot.val() || {};
     const tasks: Task[] = Object.entries(data)
       .map(([id, value]) => ({ id, ...(value as Omit<Task, 'id'>) }))
-      .filter((t) => t.title && t.title.trim() !== ''); // drop stray/blank entries
+      .filter((t) => t.title && t.title.trim() !== '');
     callback(tasks);
   });
 }
