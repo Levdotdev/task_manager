@@ -52,18 +52,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { IonApp, IonRouterOutlet, IonIcon, IonSpinner } from '@ionic/vue';
 import { layersOutline, leafOutline, arrowForwardOutline, checkmarkOutline, checkmarkCircleOutline, sparklesOutline, checkboxOutline, timeOutline, attachOutline, lockClosedOutline } from 'ionicons/icons';
 import { onAuthChange, signInWithGoogle } from '@/services/userService';
 import type { User } from 'firebase/auth';
 import DarkModeToggle from '@/components/DarkModeToggle.vue';
+import { setReminderUser, startReminderListeners } from '@/services/reminderService';
 const user = ref<User | null>(null);
 const authReady = ref(false);
 const signingIn = ref(false);
 const signInError = ref('');
-const stop = onAuthChange((u) => { user.value = u; authReady.value = true; });
-onUnmounted(stop);
+const stop = onAuthChange((u) => { setReminderUser(u?.uid || null); user.value = u; authReady.value = true; });
+let stopReminders: (() => void) | undefined;
+let disposed = false;
+onMounted(async () => { const cleanup = await startReminderListeners(); if (disposed) cleanup(); else stopReminders = cleanup; });
+onUnmounted(() => { disposed = true; stop(); stopReminders?.(); });
 async function handleSignIn() {
   if (signingIn.value) return;
   signingIn.value = true;

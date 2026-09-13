@@ -16,12 +16,49 @@ beforeEach(() => vi.resetAllMocks());
 describe('Task form', () => {
   test('editing preserves the task and attachments and uses the chosen priority', async () => {
     const wrapper = mount(TaskForm, { props: { task }, global: { stubs } });
+    await flushPromises();
     await wrapper.get('select[name="priority"]').setValue('low');
     await wrapper.get('form').trigger('submit');
     await flushPromises();
-    expect(mocks.updateTask).toHaveBeenCalledWith('existing', expect.objectContaining({ title: task.title, description: task.description, due_date: task.due_date, priority: 'low', photoDataUrl: task.image, link: task.link, fileName: task.fileName, fileData: task.fileData }));
+    expect(mocks.updateTask).toHaveBeenCalledWith('existing', expect.objectContaining({ title: task.title, description: task.description, due_date: task.due_date, priority: 'low', photoDataUrl: task.image, links: [expect.objectContaining({ url: task.link })], files: [expect.objectContaining({ name: task.fileName, data: task.fileData })] }));
     expect(mocks.addTask).not.toHaveBeenCalled();
     expect(wrapper.emitted('taskSaved')).toHaveLength(1);
+  });
+  test('saves multiple files, titled links, a category, recurrence, and reminder offsets', async () => {
+    const wrapper = mount(TaskForm, { props: { task }, global: { stubs } });
+    await flushPromises();
+    await wrapper.get('input[name="category"]').setValue('Learning');
+    await wrapper.get('select[name="recurrence"]').setValue('weekdays');
+    await wrapper.get('input[type="checkbox"][value="15"]').setValue(true);
+    await wrapper.get('input[name="linkTitle-0"]').setValue('Report guide');
+    await wrapper.get('.add-link').trigger('click');
+    await wrapper.get('input[name="linkTitle-1"]').setValue('Project brief');
+    await wrapper.get('input[name="linkUrl-1"]').setValue('https://example.org/brief');
+    const input = wrapper.get<HTMLInputElement>('input[type="file"]');
+    Object.defineProperty(input.element, 'files', { value: [new File(['one'], 'one.txt'), new File(['two'], 'two.txt')], configurable: true });
+    await input.trigger('change');
+    await vi.waitFor(() => expect(wrapper.findAll('.file-list li')).toHaveLength(3));
+    await wrapper.get('form').trigger('submit');
+    await flushPromises();
+    const payload = mocks.updateTask.mock.calls[0][1];
+    expect(payload.files.map((file: { name: string }) => file.name)).toEqual(['notes.txt', 'one.txt', 'two.txt']);
+    expect(payload.links.map((link: { title: string }) => link.title)).toEqual(['Report guide', 'Project brief']);
+    expect(payload).toMatchObject({ category: 'Learning', recurrence: 'weekdays', reminders: [15] });
+  });
+  test('removing migrated files and links saves empty lists', async () => {
+    const wrapper = mount(TaskForm, { props: { task }, global: { stubs } });
+    await flushPromises();
+    await wrapper.get('button[aria-label="Remove notes.txt"]').trigger('click');
+    await wrapper.get('button[aria-label="Remove link 1"]').trigger('click');
+    await wrapper.get('form').trigger('submit'); await flushPromises();
+    expect(mocks.updateTask.mock.calls[0][1]).toMatchObject({ files: [], links: [] });
+  });
+  test('rejects unsupported link schemes without losing the form', async () => {
+    const wrapper = mount(TaskForm, { props: { task }, global: { stubs } });
+    await flushPromises();
+    await wrapper.get('input[name="linkUrl-0"]').setValue('javascript:alert(1)');
+    await wrapper.get('form').trigger('submit'); await flushPromises();
+    expect(mocks.updateTask).not.toHaveBeenCalled(); expect(wrapper.get('[role="alert"]').text()).toContain('valid URL');
   });
   test('failed saves retain the entered details and allow retry', async () => {
     mocks.addTask.mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce('new-task');

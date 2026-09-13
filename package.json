@@ -17,7 +17,9 @@
     "@capacitor/camera": "^8.2.4",
     "@capacitor/core": "8.5.1",
     "@capacitor/haptics": "8.0.2",
+    "@capacitor/ios": "^8.5.2",
     "@capacitor/keyboard": "8.0.5",
+    "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/status-bar": "8.0.3",
     "@ionic/pwa-elements": "^3.4.0",
     "@ionic/vue": "^9.0.0",
@@ -25,7 +27,8 @@
     "firebase": "^12.19.0",
     "ionicons": "^8.1.0",
     "vue": "^3.5.0",
-    "vue-router": "^5.0.0"
+    "vue-router": "^5.0.0",
+    "vuedraggable": "^4.1.0"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.1",

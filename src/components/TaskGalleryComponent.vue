@@ -2,7 +2,7 @@
   <section class="task-workspace">
     <div class="overview-heading">
       <div><p class="eyebrow">Your internship, organized</p><h1>Your work, in one place.</h1><p class="overview-description">Keep a clear head. Take it one task at a time.</p></div>
-      <button class="primary-button add-task" type="button" @click="modalTask = 'new'"><ion-icon :icon="addOutline" aria-hidden="true" />Add task</button>
+      <button class="primary-button add-task" type="button" @click="newTask"><ion-icon :icon="addOutline" aria-hidden="true" />Add task</button>
     </div>
     <div class="summary-grid" aria-label="Task overview">
       <button v-for="summary in summaries" :key="summary.status" class="summary-card" :class="{ selected: filter === summary.status }" type="button" :aria-pressed="filter === summary.status" @click="filter = summary.status">
@@ -11,111 +11,153 @@
         <span class="summary-caption">{{ summary.caption }}</span>
       </button>
     </div>
+    <div v-if="reminderState.native && (hasReminders || reminderState.error)" class="reminder-banner"><ion-icon :icon="notificationsOutline" aria-hidden="true" /><div><strong>{{ reminderState.granted ? 'Device reminders are on.' : 'Give your deadlines a gentle nudge.' }}</strong><p>{{ reminderState.error || (!reminderState.granted ? 'Allow notifications to receive your saved reminders on this device.' : !reminderState.exactAllowed ? 'Allow precise alarms in Android settings for reminders at the selected time.' : reminderState.deferred ? `${reminderState.deferred} later reminders will be scheduled as you reopen the app. The nearest reminders are ready.` : 'Upcoming task reminders are scheduled on this device.') }}</p></div><button v-if="!reminderState.granted" class="secondary-button" type="button" :disabled="reminderState.enabling" @click="enableDeviceReminders">{{ reminderState.enabling ? 'Enabling…' : 'Enable reminders' }}</button><button v-else-if="!reminderState.exactAllowed" class="secondary-button" type="button" @click="openExactReminderSettings">Open settings</button></div>
     <section class="task-list-section" aria-labelledby="task-list-title">
       <div class="list-toolbar">
-        <div class="list-heading"><h2 id="task-list-title">Your tasks</h2><span>{{ filteredCount }} {{ filteredCount === 1 ? 'task' : 'tasks' }}</span></div>
-        <div class="status-filter" aria-label="Filter tasks">
-          <button v-for="status in statuses" :key="status" type="button" :class="{ active: filter === status }" :aria-pressed="filter === status" @click="filter = status">{{ status }}</button>
+        <div class="list-heading"><h2 id="task-list-title">Your tasks</h2><span aria-live="polite">{{ filteredTasks.length }} {{ filteredTasks.length === 1 ? 'task' : 'tasks' }}</span></div>
+        <div class="view-switch" aria-label="Task view"><button type="button" :class="{ active: view === 'list' }" :aria-pressed="view === 'list'" @click="view = 'list'"><ion-icon :icon="gridOutline" aria-hidden="true" />List</button><button type="button" :class="{ active: view === 'calendar' }" :aria-pressed="view === 'calendar'" @click="view = 'calendar'"><ion-icon :icon="calendarOutline" aria-hidden="true" />Calendar</button></div>
+      </div>
+      <div class="filter-panel">
+        <label class="search-field"><ion-icon :icon="searchOutline" aria-hidden="true" /><input v-model="query" name="taskSearch" type="search" aria-label="Search tasks, notes, categories, files and links" placeholder="Search tasks, notes, files, links…" /><button v-if="query" type="button" aria-label="Clear search" @click="query = ''"><ion-icon :icon="closeOutline" aria-hidden="true" /></button></label>
+        <div class="filter-controls">
+          <label class="field"><span>Category</span><select v-model="categoryFilter" aria-label="Filter by category"><option value="all">All categories</option><option value="uncategorized">Uncategorized</option><option v-for="name in categories" :key="name" :value="`category:${name}`">{{ name }}</option></select></label>
+          <label class="field"><span>Priority</span><select v-model="priorityFilter" aria-label="Filter by priority"><option value="all">All priorities</option><option value="high">High priority</option><option value="medium">Medium priority</option><option value="low">Low priority</option></select></label>
+          <label class="field"><span>Repeat</span><select v-model="repeatFilter" aria-label="Filter by repeat"><option value="all">All tasks</option><option value="recurring">Recurring tasks</option><option value="none">Does not repeat</option><option v-for="option in RECURRENCE_OPTIONS.filter(o => o.value !== 'none')" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
+          <label v-if="view === 'list'" class="field"><span>Sort by</span><select v-model="sort" aria-label="Sort tasks"><option value="date">Due date</option><option value="priority">Priority</option><option value="manual">Your order</option></select></label>
         </div>
+        <div class="filter-bottom"><div class="status-filter" aria-label="Filter by status"><button v-for="status in statuses" :key="status" type="button" :class="{ active: filter === status }" :aria-pressed="filter === status" @click="filter = status">{{ status }}</button></div><button v-if="hasFilters" class="clear-filters" type="button" @click="clearFilters">Clear filters</button></div>
       </div>
-      <div v-for="group in visibleGroups" :key="group.date" class="date-group">
-        <div class="date-heading"><h3>{{ formatDateHeader(group.date) }}</h3><span>{{ group.tasks.length }}</span><div class="date-rule" /></div>
-        <div class="task-grid">
-          <TaskTile v-for="task in group.tasks" :key="task.id" :task="task" @edit="modalTask = task" @complete="openConfirmation('complete', task)" @revert="openConfirmation('revert', task)" @delete="openConfirmation('delete', task)" />
-        </div>
-      </div>
-      <div v-if="visibleGroups.length === 0" class="empty-state">
-        <span class="empty-icon"><ion-icon :icon="emptyState.icon" aria-hidden="true" /></span><h3>{{ emptyState.title }}</h3><p>{{ emptyState.description }}</p>
-        <button v-if="filter === 'Pending'" class="secondary-button" type="button" @click="modalTask = 'new'"><ion-icon :icon="addOutline" aria-hidden="true" />Add your first task</button>
-      </div>
+      <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
+      <p v-if="orderError" class="form-error" role="alert">{{ orderError }}</p>
+      <p class="sr-only" role="status">{{ orderMessage }}</p>
+      <TaskCalendar v-if="view === 'calendar'" :tasks="matchingTasks" :selected-date="selectedDate" :now="now" @select="selectedDate = $event" />
+      <div v-if="view === 'calendar'" class="selected-day-heading"><h3>{{ formatDateHeader(selectedDate) }}</h3><button class="clear-filters" type="button" @click="newTask">Add a task this day</button></div>
+      <template v-if="view === 'list' && sort === 'manual' && filteredTasks.length">
+        <p class="order-hint"><ion-icon :icon="reorderThreeOutline" aria-hidden="true" />{{ orderBusy ? 'Saving your order…' : 'Drag a card by its handle, or use its arrow buttons.' }}</p>
+        <Draggable v-model="manualTasks" class="task-grid manual-grid" item-key="id" handle=".drag-handle" :animation="150" :delay="120" :delay-on-touch-only="true" :disabled="orderBusy" ghost-class="task-ghost" @change="saveOrder"><template #item="{ element, index }"><TaskTile :task="element" :now="now" manual-order :busy="orderBusy" :can-move-up="index > 0" :can-move-down="index < manualTasks.length - 1" @move="moveTask(index, $event)" @edit="modalTask = element" @complete="openConfirmation('complete', element)" @revert="openConfirmation('revert', element)" @delete="openConfirmation('delete', element)" /></template></Draggable>
+      </template>
+      <template v-else><div v-for="group in visibleGroups" :key="group.date" class="date-group"><div v-if="view === 'list'" class="date-heading"><h3>{{ group.date === 'priority' ? 'Highest priority first' : formatDateHeader(group.date) }}</h3><span>{{ group.tasks.length }}</span><div class="date-rule" /></div><div class="task-grid"><TaskTile v-for="task in group.tasks" :key="task.id" :task="task" :now="now" @edit="modalTask = task" @complete="openConfirmation('complete', task)" @revert="openConfirmation('revert', task)" @delete="openConfirmation('delete', task)" /></div></div></template>
+      <div v-if="filteredTasks.length === 0 && !loadError" class="empty-state"><span class="empty-icon"><ion-icon :icon="emptyState.icon" aria-hidden="true" /></span><h3>{{ emptyState.title }}</h3><p>{{ emptyState.description }}</p><button v-if="hasFilters" class="secondary-button" type="button" @click="clearFilters">Clear filters</button><button v-else class="secondary-button" type="button" @click="newTask"><ion-icon :icon="addOutline" aria-hidden="true" />Add a task</button></div>
     </section>
     <p class="workspace-footer"><ion-icon :icon="leafOutline" aria-hidden="true" />Small steps still move you forward.</p>
   </section>
-
-  <AppDialog :is-open="modalTask !== null" :title="modalTask === 'new' ? 'A new task, a fresh start.' : 'Make a few adjustments.'" :description="modalTask === 'new' ? 'Add the details now. Your future self will thank you.' : 'Update the details and keep your plans on track.'" :icon="createOutline" :busy="formSaving" wide hide-footer @dismiss="closeTaskForm">
-    <TaskFormComponent :task="modalTask === 'new' ? null : modalTask" @task-saved="modalTask = null" @saving-change="formSaving = $event" @cancel="closeTaskForm" />
-  </AppDialog>
-  <AppDialog :is-open="confirmation !== null" :title="confirmationDetails.title" :description="confirmationDetails.description" :icon="confirmationDetails.icon" :confirm-label="confirmationDetails.label" :busy="actionBusy" busy-label="Working…" :danger="confirmation?.action === 'delete'" @dismiss="closeConfirmation" @confirm="confirmAction">
-    <div v-if="confirmation" class="confirmation-task"><ion-icon :icon="documentTextOutline" aria-hidden="true" /><strong>{{ confirmation.task.title }}</strong></div>
-    <p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p>
-  </AppDialog>
+  <AppDialog :is-open="modalTask !== null" :title="modalTask === 'new' ? 'A new task, a fresh start.' : 'Make a few adjustments.'" :description="modalTask === 'new' ? 'Add the details now. Your future self will thank you.' : 'Update the details and keep your plans on track.'" :icon="createOutline" :busy="formSaving" wide hide-footer @dismiss="closeTaskForm"><TaskFormComponent :task="modalTask === 'new' ? null : modalTask" :categories="categories" :default-due-date="defaultDueDate" @task-saved="modalTask = null" @saving-change="formSaving = $event" @cancel="closeTaskForm" /></AppDialog>
+  <AppDialog :is-open="confirmation !== null" :title="confirmationDetails.title" :description="confirmationDetails.description" :icon="confirmationDetails.icon" :confirm-label="confirmationDetails.label" :busy="actionBusy" busy-label="Working…" :danger="confirmation?.action === 'delete'" @dismiss="closeConfirmation" @confirm="confirmAction"><div v-if="confirmation" class="confirmation-task"><ion-icon :icon="documentTextOutline" aria-hidden="true" /><strong>{{ confirmation.task.title }}</strong></div><p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p></AppDialog>
 </template>
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { IonIcon } from '@ionic/vue';
-import { addOutline, timeOutline, alertCircleOutline, checkmarkCircleOutline, createOutline, trashOutline, arrowUndoOutline, documentTextOutline, leafOutline, checkboxOutline } from 'ionicons/icons';
-import { subscribeToTasks, markTaskCompleted, revertTaskToPending, deleteTask, type Task } from '@/services/taskService';
+import Draggable from 'vuedraggable';
+import { addOutline, timeOutline, alertCircleOutline, checkmarkCircleOutline, createOutline, trashOutline, arrowUndoOutline, documentTextOutline, leafOutline, checkboxOutline, gridOutline, calendarOutline, searchOutline, closeOutline, reorderThreeOutline, notificationsOutline } from 'ionicons/icons';
+import { subscribeToTasks, markTaskCompleted, revertTaskToPending, deleteTask, reorderTasks } from '@/services/taskService';
+import { RECURRENCE_OPTIONS, type Task, type TaskPriority, type Recurrence } from '@/models/task';
+import { displayStatus, matchesSearch, taskDateKey, localDateKey, localDateTime, manualTaskOrder, mergeVisibleOrder } from '@/utils/tasks';
+import { reminderState, syncTaskReminders, enableDeviceReminders, openExactReminderSettings } from '@/services/reminderService';
 import TaskFormComponent from './TaskFormComponent.vue';
 import TaskTile from './TaskTile.vue';
+import TaskCalendar from './TaskCalendar.vue';
 import AppDialog from './AppDialog.vue';
 const tasks = ref<Task[]>([]);
-const unsubscribe = subscribeToTasks((updated) => { tasks.value = updated; });
-onUnmounted(unsubscribe);
-const statuses = ['Pending', 'Missed', 'Completed'] as const;
+const now = ref(new Date());
+const statuses = ['All', 'Pending', 'Missed', 'Completed'] as const;
 const filter = ref<typeof statuses[number]>('Pending');
+const query = ref('');
+const categoryFilter = ref('all');
+const priorityFilter = ref<TaskPriority | 'all'>('all');
+const repeatFilter = ref<Recurrence | 'all' | 'recurring'>('all');
+const sort = ref<'date' | 'priority' | 'manual'>('date');
+const view = ref<'list' | 'calendar'>('list');
+const selectedDate = ref(localDateKey(now.value));
 const modalTask = ref<Task | 'new' | null>(null);
+const defaultDueDate = ref('');
 const formSaving = ref(false);
+const loadError = ref('');
+const orderError = ref('');
+const orderMessage = ref('');
+const orderBusy = ref(false);
+const optimisticOrder = ref<string[] | null>(null);
 type Action = 'delete' | 'complete' | 'revert';
 const confirmation = ref<{ action: Action; task: Task } | null>(null);
 const actionBusy = ref(false);
 const actionError = ref('');
-function displayStatus(task: Task): typeof statuses[number] {
-  if (task.status === 'Completed') return 'Completed';
-  return new Date(task.due_date) < new Date() ? 'Missed' : 'Pending';
-}
-const counts = computed(() => ({
-  Pending: tasks.value.filter(t => displayStatus(t) === 'Pending').length,
-  Missed: tasks.value.filter(t => displayStatus(t) === 'Missed').length,
-  Completed: tasks.value.filter(t => displayStatus(t) === 'Completed').length,
-}));
+const categories = computed(() => [...new Set(tasks.value.map(t => t.category?.trim()).filter((name): name is string => !!name))].sort((a, b) => a.localeCompare(b)));
+const hasReminders = computed(() => tasks.value.some(t => t.status !== 'Completed' && t.reminders?.length));
+const hasFilters = computed(() => !!query.value.trim() || categoryFilter.value !== 'all' || priorityFilter.value !== 'all' || repeatFilter.value !== 'all' || filter.value !== 'All');
+const counts = computed(() => ({ Pending: tasks.value.filter(t => displayStatus(t, now.value) === 'Pending').length, Missed: tasks.value.filter(t => displayStatus(t, now.value) === 'Missed').length, Completed: tasks.value.filter(t => t.status === 'Completed').length }));
 const summaries = computed(() => [
   { status: 'Pending' as const, label: 'On your list', count: counts.value.Pending, icon: timeOutline, tone: 'pending', caption: 'Ready when you are' },
   { status: 'Missed' as const, label: 'Needs attention', count: counts.value.Missed, icon: alertCircleOutline, tone: 'missed', caption: 'A chance to catch up' },
   { status: 'Completed' as const, label: 'All wrapped up', count: counts.value.Completed, icon: checkmarkCircleOutline, tone: 'completed', caption: 'Look how far you’ve come' },
 ]);
+const matchingTasks = computed(() => tasks.value.filter(task => {
+  if (filter.value !== 'All' && displayStatus(task, now.value) !== filter.value) return false;
+  if (categoryFilter.value === 'uncategorized' && task.category) return false;
+  if (categoryFilter.value.startsWith('category:') && task.category !== categoryFilter.value.slice(9)) return false;
+  if (priorityFilter.value !== 'all' && task.priority !== priorityFilter.value) return false;
+  const repeat = task.recurrence || 'none';
+  if (repeatFilter.value === 'recurring' && repeat === 'none') return false;
+  if (repeatFilter.value !== 'all' && repeatFilter.value !== 'recurring' && repeat !== repeatFilter.value) return false;
+  return matchesSearch(task, query.value);
+}));
+const filteredTasks = computed(() => view.value === 'calendar' ? matchingTasks.value.filter(t => taskDateKey(t) === selectedDate.value) : matchingTasks.value);
 const priorityRank = { high: 0, medium: 1, low: 2 };
+function byDate(a: Task, b: Task) { return new Date(a.due_date).getTime() - new Date(b.due_date).getTime() || priorityRank[a.priority] - priorityRank[b.priority]; }
 const visibleGroups = computed(() => {
+  if (view.value === 'list' && sort.value === 'priority') return filteredTasks.value.length ? [{ date: 'priority', tasks: [...filteredTasks.value].sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || byDate(a, b)) }] : [];
   const groups: Record<string, Task[]> = {};
-  for (const task of tasks.value.filter(t => displayStatus(t) === filter.value)) {
-    const date = task.due_date.slice(0, 10);
-    (groups[date] ??= []).push(task);
-  }
+  for (const task of filteredTasks.value) (groups[taskDateKey(task)] ??= []).push(task);
   const dates = Object.keys(groups).sort();
   if (filter.value === 'Completed') dates.reverse();
-  return dates.map(date => ({ date, tasks: [...groups[date]].sort((a, b) =>
-    filter.value === 'Completed' ? priorityRank[b.priority] - priorityRank[a.priority] : priorityRank[a.priority] - priorityRank[b.priority]
-  ) }));
+  return dates.map(date => ({ date, tasks: [...groups[date]].sort(byDate) }));
 });
-const filteredCount = computed(() => counts.value[filter.value]);
+const allOrderedTasks = computed(() => {
+  const ordered = manualTaskOrder(tasks.value);
+  if (!optimisticOrder.value) return ordered;
+  const positions = new Map(optimisticOrder.value.map((id, index) => [id, index]));
+  return ordered.sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
+});
+const manualTasks = computed({ get: () => { const visibleIds = new Set(filteredTasks.value.map(t => t.id)); return allOrderedTasks.value.filter(t => visibleIds.has(t.id)); }, set: (visible: Task[]) => { optimisticOrder.value = mergeVisibleOrder(allOrderedTasks.value.map(t => t.id), visible.map(t => t.id)); } });
 const emptyState = computed(() => {
+  if (query.value || categoryFilter.value !== 'all' || priorityFilter.value !== 'all' || repeatFilter.value !== 'all') return { icon: searchOutline, title: 'No tasks match just yet.', description: 'Try another search or clear a filter to see more tasks.' };
+  if (view.value === 'calendar') return { icon: calendarOutline, title: 'A little room in your day.', description: 'There are no tasks for this date with your current status filter.' };
   if (filter.value === 'Completed') return { icon: checkboxOutline, title: 'Your wins will live here.', description: 'Complete a task and give yourself a little credit.' };
   if (filter.value === 'Missed') return { icon: checkmarkCircleOutline, title: 'Nothing to catch up on.', description: 'You’re on top of your deadlines. Keep it up.' };
   return { icon: leafOutline, title: 'A little room for your next step.', description: 'Add a task to start planning your day.' };
 });
 const confirmationDetails = computed(() => {
-  if (confirmation.value?.action === 'delete') return { title: 'Delete this task?', description: 'This will remove the task and its attachments permanently.', icon: trashOutline, label: 'Delete task' };
-  if (confirmation.value?.action === 'revert') return { title: 'Back on your list?', description: 'Move this task back to pending so you can work on it again.', icon: arrowUndoOutline, label: 'Move to pending' };
-  return { title: 'Another task, done.', description: 'Mark this task as completed and celebrate a little progress.', icon: checkmarkCircleOutline, label: 'Mark as completed' };
+  if (confirmation.value?.action === 'delete') return { title: 'Delete this task?', description: 'This will remove the task and its attachments permanently. Deleting a pending recurring task stops its future repeats.', icon: trashOutline, label: 'Delete task' };
+  if (confirmation.value?.action === 'revert') return { title: 'Back on your list?', description: confirmation.value.task.nextTaskId ? 'Move this occurrence back to pending. Its next occurrence will stay on your list.' : 'Move this task back to pending so you can work on it again.', icon: arrowUndoOutline, label: 'Move to pending' };
+  return { title: 'Another task, done.', description: confirmation.value?.task.recurrence && confirmation.value.task.recurrence !== 'none' ? 'Mark this occurrence as completed. The next upcoming occurrence will be added to your list.' : 'Mark this task as completed and celebrate a little progress.', icon: checkmarkCircleOutline, label: 'Mark as completed' };
 });
-function formatDateHeader(date: string) {
-  return new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
-}
+function clearFilters() { query.value = ''; categoryFilter.value = 'all'; priorityFilter.value = 'all'; repeatFilter.value = 'all'; filter.value = 'All'; }
+function newTask() { defaultDueDate.value = view.value === 'calendar' ? `${selectedDate.value}T17:00` : localDateTime(new Date(now.value.getTime() + 3600_000)); modalTask.value = 'new'; }
+function formatDateHeader(date: string) { return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }); }
 function closeTaskForm() { if (!formSaving.value) modalTask.value = null; }
 function openConfirmation(action: Action, task: Task) { actionError.value = ''; confirmation.value = { action, task }; }
 function closeConfirmation() { if (!actionBusy.value) { confirmation.value = null; actionError.value = ''; } }
+async function saveOrder() {
+  if (orderBusy.value || !optimisticOrder.value) return;
+  const ids = [...optimisticOrder.value];
+  orderBusy.value = true; orderError.value = '';
+  try { await reorderTasks(ids); orderMessage.value = 'Your task order was saved.'; }
+  catch { orderError.value = 'We couldn’t save your order. Check your connection and try again.'; }
+  finally { optimisticOrder.value = null; orderBusy.value = false; }
+}
+async function moveTask(index: number, direction: number) { const ordered = [...manualTasks.value]; const next = index + direction; if (orderBusy.value || next < 0 || next >= ordered.length) return; [ordered[index], ordered[next]] = [ordered[next], ordered[index]]; manualTasks.value = ordered; await saveOrder(); }
 async function confirmAction() {
   if (!confirmation.value || actionBusy.value) return;
-  const { action, task } = confirmation.value;
-  actionBusy.value = true;
-  actionError.value = '';
-  try {
-    if (action === 'delete') await deleteTask(task.id);
-    else if (action === 'complete') await markTaskCompleted(task.id);
-    else await revertTaskToPending(task.id);
-    confirmation.value = null;
-  } catch { actionError.value = 'We couldn’t update this task. Check your connection and try again.'; }
+  const { action, task } = confirmation.value; actionBusy.value = true; actionError.value = '';
+  try { if (action === 'delete') await deleteTask(task.id); else if (action === 'complete') await markTaskCompleted(task.id); else await revertTaskToPending(task.id); confirmation.value = null; }
+  catch { actionError.value = 'We couldn’t update this task. Check your connection and try again.'; }
   finally { actionBusy.value = false; }
 }
+function openReminder(event: Event) { const task = tasks.value.find(t => t.id === (event as CustomEvent<string>).detail); if (task) { clearFilters(); view.value = 'list'; modalTask.value = task; } }
+let reminderTimer: ReturnType<typeof setTimeout> | undefined;
+watch(tasks, updated => { if (!reminderState.native) return; clearTimeout(reminderTimer); reminderTimer = setTimeout(() => syncTaskReminders(updated), 250); });
+const unsubscribe = subscribeToTasks(updated => { tasks.value = updated; loadError.value = ''; }, () => { loadError.value = 'Your tasks couldn’t be loaded. Check your connection and reopen the app.'; });
+const clock = setInterval(() => { now.value = new Date(); if (reminderState.native) syncTaskReminders(tasks.value); }, 60_000);
+onMounted(() => window.addEventListener('task-reminder-open', openReminder));
+onUnmounted(() => { unsubscribe(); clearInterval(clock); clearTimeout(reminderTimer); window.removeEventListener('task-reminder-open', openReminder); });
 </script>
 <style scoped>
 .overview-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
@@ -137,6 +179,32 @@ h1 { margin: 0; font-family: Georgia, serif; font-size: clamp(30px, 3.5vw, 42px)
 .list-heading { display: flex; align-items: center; gap: 12px; }
 .list-heading h2 { margin: 0; font-size: 21px; font-weight: 650; letter-spacing: -.6px; }
 .list-heading > span { padding: 5px 9px; border-radius: 8px; background: var(--app-surface-alt); color: var(--app-muted); font-size: 11px; }
+.view-switch { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--app-line); border-radius: 11px; background: var(--app-surface-alt); }
+.view-switch button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 13px; border: 0; border-radius: 7px; color: var(--app-muted); background: transparent; font-size: 12px; font-weight: 600; }
+.view-switch button.active { color: var(--app-text); background: var(--app-surface); box-shadow: 0 2px 5px rgb(30 50 36 / 6%); }
+.filter-panel { display: flex; flex-direction: column; gap: 18px; padding: 20px; margin-bottom: 26px; border: 1px solid var(--app-line); border-radius: 16px; background: var(--app-surface); }
+.search-field { display: flex; align-items: center; gap: 10px; padding: 0 13px; border: 1px solid var(--app-line); border-radius: 10px; background: var(--app-bg); }
+.search-field > ion-icon { flex-shrink: 0; color: var(--app-muted); font-size: 19px; }
+.search-field input { min-width: 0; width: 100%; height: 46px; padding: 0; border: 0; outline: 0; background: transparent; color: var(--app-text); font-size: 13px; }
+.search-field:focus-within { border-color: var(--ion-color-primary); }
+.search-field button { display: grid; place-items: center; flex-shrink: 0; width: 40px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--app-muted); font-size: 17px; }
+.filter-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.filter-controls .field { gap: 7px; }
+.filter-controls .field > span { font-size: 10px; }
+.filter-controls select { font-size: 12px; min-height: 44px; padding: 10px 11px; }
+.filter-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.clear-filters { min-height: 44px; padding: 8px 5px; border: 0; background: transparent; color: var(--ion-color-primary); font-size: 11px; font-weight: 600; }
+.selected-day-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }
+.selected-day-heading h3 { margin: 0; font-size: 14px; color: var(--app-text); }
+.order-hint { display: flex; align-items: center; gap: 7px; margin: 0 0 16px; color: var(--app-muted); font-size: 12px; line-height: 1.6; }
+.task-ghost { opacity: .35; }
+.reminder-banner { display: flex; align-items: center; gap: 16px; padding: 18px; margin-bottom: 26px; border: 1px solid var(--app-line); border-radius: 13px; background: var(--app-primary-soft); }
+.reminder-banner > ion-icon { flex-shrink: 0; font-size: 24px; color: var(--ion-color-primary); }
+.reminder-banner > div { flex: 1; }
+.reminder-banner strong { font-size: 12px; }
+.reminder-banner p { margin: 5px 0 0; color: var(--app-muted); font-size: 11px; line-height: 1.6; }
+.reminder-banner .secondary-button { flex-shrink: 0; font-size: 11px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .status-filter { display: flex; padding: 4px; gap: 3px; border: 1px solid var(--app-line); border-radius: 12px; background: var(--app-surface-alt); }
 .status-filter button { min-height: 38px; padding: 9px 18px; border: 0; border-radius: 8px; background: transparent; color: var(--app-muted); font-size: 12px; font-weight: 600; }
 .status-filter button.active { background: var(--app-surface); color: var(--app-text); box-shadow: 0 2px 5px rgb(30 50 36 / 6%); }
@@ -167,7 +235,15 @@ h1 { margin: 0; font-family: Georgia, serif; font-size: clamp(30px, 3.5vw, 42px)
   .summary-copy strong { font-size: 25px; margin-top: 6px; }
   .summary-caption { display: none; }
   .list-toolbar { align-items: flex-start; flex-direction: column; gap: 18px; margin-bottom: 22px; }
+  .list-toolbar { flex-direction: row; align-items: center; flex-wrap: wrap; }
+  .filter-panel { padding: 15px; gap: 15px; }
+  .filter-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .filter-controls select, .search-field input { font-size: 16px; }
   .status-filter { width: 100%; }
+  .filter-bottom { align-items: stretch; }
+  .reminder-banner { flex-wrap: wrap; }
+  .reminder-banner .secondary-button { width: 100%; }
+  .view-switch button { min-height: 42px; padding: 8px 10px; }
   .status-filter button { flex: 1; min-height: 42px; padding: 10px 8px; }
   .task-grid { grid-template-columns: 1fr; gap: 14px; }
   .date-heading h3 { font-size: 11px; }
