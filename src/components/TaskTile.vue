@@ -1,102 +1,66 @@
 <template>
-  <ion-card class="task-tile">
-    <ion-img v-if="task.image" :src="task.image" class="task-thumb" />
-    <div v-else class="task-thumb placeholder">
-      <ion-icon :icon="imageOutlineIcon" />
-      <p>No Photo</p>
-    </div>
-
-    <ion-card-header>
-      <div class="badge-row">
-        <ion-badge :color="priorityColor(task.priority)">{{ task.priority }}</ion-badge>
-        <ion-badge :color="statusColor">{{ displayStatus }}</ion-badge>
-      </div>
-      <ion-card-title class="task-title">{{ task.title }}</ion-card-title>
-    </ion-card-header>
-
-    <ion-card-content>
+  <article class="task-tile" :class="{ 'task-completed': task.status === 'Completed' }">
+    <div v-if="task.image" class="task-thumb"><img :src="task.image" :alt="`Photo for ${task.title}`" loading="lazy" /></div>
+    <div class="task-body">
+      <div class="badge-row"><span class="priority-badge" :class="task.priority"><span />{{ task.priority }} priority</span><span class="status-badge" :class="displayStatus.toLowerCase()">{{ displayStatus }}</span></div>
+      <h3 class="task-title">{{ task.title }}</h3>
       <p class="task-description">{{ task.description }}</p>
-      <p class="task-due">Due: {{ formattedDue }}</p>
-
+      <p class="task-due" :class="{ overdue: displayStatus === 'Missed' }"><ion-icon :icon="calendarOutline" aria-hidden="true" /><time :datetime="task.due_date">{{ formattedDue }}</time></p>
       <div v-if="task.link || task.fileData" class="attachments">
-        <a v-if="task.link" :href="task.link" target="_blank" rel="noopener" class="attachment-link">
-          <ion-icon :icon="linkIcon" /> Link
-        </a>
-        <a v-if="task.fileData" :href="task.fileData" :download="task.fileName || 'attachment'" class="attachment-link">
-          <ion-icon :icon="documentIcon" /> {{ task.fileName || 'File' }}
-        </a>
+        <a v-if="task.link" :href="task.link" target="_blank" rel="noopener noreferrer" class="attachment-link"><ion-icon :icon="linkOutline" aria-hidden="true" />Open link<ion-icon :icon="arrowUpRight" aria-hidden="true" /></a>
+        <a v-if="task.fileData" :href="task.fileData" :download="task.fileName || 'attachment'" class="attachment-link"><ion-icon :icon="documentAttachOutline" aria-hidden="true" /><span>{{ task.fileName || 'Attachment' }}</span></a>
       </div>
-
       <div class="tile-actions">
-        <template v-if="task.status === 'Completed'">
-          <ion-button size="small" fill="outline" @click="$emit('revert')">
-            <ion-icon slot="start" :icon="revertIcon" />Revert
-          </ion-button>
-          <ion-button size="small" fill="outline" color="danger" @click="$emit('delete')">
-            <ion-icon slot="start" :icon="trashIcon" />Delete
-          </ion-button>
-        </template>
+        <button v-if="task.status === 'Completed'" type="button" class="task-action" @click="$emit('revert')"><ion-icon :icon="arrowUndoOutline" aria-hidden="true" />Revert</button>
         <template v-else>
-          <ion-button size="small" fill="outline" @click="$emit('edit')">
-            <ion-icon slot="start" :icon="editIcon" />Edit
-          </ion-button>
-          <ion-button size="small" fill="outline" color="success" @click="$emit('complete')">
-            <ion-icon slot="start" :icon="checkmarkIcon" />Complete
-          </ion-button>
-          <ion-button size="small" fill="outline" color="danger" @click="$emit('delete')">
-            <ion-icon slot="start" :icon="trashIcon" />Delete
-          </ion-button>
+          <button type="button" class="task-action" @click="$emit('edit')"><ion-icon :icon="createOutline" aria-hidden="true" />Edit</button>
+          <button type="button" class="task-action complete-action" @click="$emit('complete')"><ion-icon :icon="checkmarkOutline" aria-hidden="true" />Complete</button>
         </template>
+        <button type="button" class="task-action delete-action" :aria-label="`Delete ${task.title}`" title="Delete task" @click="$emit('delete')"><ion-icon :icon="trashOutline" aria-hidden="true" /></button>
       </div>
-    </ion-card-content>
-  </ion-card>
+    </div>
+  </article>
 </template>
-
 <script setup lang="ts">
 import { computed } from 'vue';
-import { IonCard, IonCardHeader, IonCardTitle, IonCardContent, IonImg, IonIcon, IonBadge, IonButton } from '@ionic/vue';
-import {
-  imageOutline as imageOutlineIcon, create as editIcon, trash as trashIcon,
-  checkmarkDone as checkmarkIcon, arrowUndo as revertIcon,
-  link as linkIcon, documentAttach as documentIcon,
-} from 'ionicons/icons';
+import { IonIcon } from '@ionic/vue';
+import { createOutline, trashOutline, checkmarkOutline, arrowUndoOutline, linkOutline, documentAttachOutline, calendarOutline, arrowForwardOutline } from 'ionicons/icons';
 import type { Task } from '@/services/taskService';
-
 const props = defineProps<{ task: Task }>();
-defineEmits<{ (e: 'edit'): void; (e: 'delete'): void; (e: 'complete'): void; (e: 'revert'): void; }>();
-
-const isMissed = computed(() => props.task.status === 'Pending' && new Date(props.task.due_date) < new Date());
-const displayStatus = computed(() => props.task.status === 'Completed' ? 'Completed' : (isMissed.value ? 'Missed' : 'Pending'));
-const statusColor = computed(() => props.task.status === 'Completed' ? 'success' : (isMissed.value ? 'danger' : 'warning'));
-const formattedDue = computed(() =>
-  new Date(props.task.due_date).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
-);
-
-function priorityColor(priority: Task['priority']) {
-  if (priority === 'high') return 'danger';
-  if (priority === 'medium') return 'warning';
-  return 'medium';
-}
+defineEmits<{ (e: 'edit'): void; (e: 'delete'): void; (e: 'complete'): void; (e: 'revert'): void }>();
+const arrowUpRight = arrowForwardOutline;
+const displayStatus = computed(() => props.task.status === 'Completed' ? 'Completed' : new Date(props.task.due_date) < new Date() ? 'Missed' : 'Pending');
+const formattedDue = computed(() => new Date(props.task.due_date).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
 </script>
-
 <style scoped>
-.task-thumb { width: 100%; display: block; }
-.task-thumb::part(image) { width: 100%; height: auto; display: block; }
-.task-thumb.placeholder {
-  aspect-ratio: 4 / 3; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 4px; background: var(--ion-color-light); color: var(--ion-color-medium);
-}
-.task-thumb.placeholder ion-icon { font-size: 2.5rem; }
-.task-thumb.placeholder p { margin: 0; font-size: 0.75rem; }
-.badge-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.task-title { font-size: 1rem; font-weight: 700; margin-top: 4px; }
-.task-description {
-  font-size: 0.85rem; color: var(--ion-color-dark); margin: 4px 0;
-  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-}
-.task-due { font-size: 0.85rem; color: var(--ion-color-medium); }
-.attachments { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
-.attachment-link { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; color: var(--ion-color-primary); text-decoration: none; }
-.tile-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.tile-actions ion-button { --padding-start: 8px; --padding-end: 8px; margin: 0; white-space: nowrap; }
+.task-tile { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid var(--app-line); border-radius: 18px; background: var(--app-surface); box-shadow: var(--app-shadow); }
+.task-thumb { height: 170px; padding: 8px 8px 0; }
+.task-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
+.task-body { display: flex; flex-direction: column; flex: 1; padding: 21px; }
+.badge-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+.priority-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: capitalize; color: var(--app-muted); }
+.priority-badge > span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.priority-badge.high { color: var(--app-danger-text); }
+.priority-badge.medium { color: var(--app-warning); }
+.status-badge { padding: 5px 8px; border-radius: 7px; color: var(--app-warning); background: var(--app-warning-soft); font-size: 10px; font-weight: 600; }
+.status-badge.missed { color: var(--app-danger-text); background: var(--app-danger-soft); }
+.status-badge.completed { color: var(--ion-color-primary); background: var(--app-primary-soft); }
+.task-title { margin: 20px 0 9px; color: var(--app-text); font-size: 17px; font-weight: 650; line-height: 1.5; letter-spacing: -.4px; overflow-wrap: anywhere; }
+.task-description { margin: 0 0 20px; color: var(--app-muted); font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.task-due { display: flex; align-items: center; gap: 7px; margin: auto 0 14px; padding-top: 8px; color: var(--app-muted); font-size: 12px; }
+.task-due ion-icon { flex-shrink: 0; font-size: 15px; }
+.task-due.overdue { color: var(--app-danger-text); }
+.attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.attachment-link { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 8px; border-radius: 7px; color: var(--app-muted); background: var(--app-bg); font-size: 11px; text-decoration: none; }
+.attachment-link span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.attachment-link ion-icon { flex-shrink: 0; font-size: 13px; }
+.attachment-link:hover { color: var(--ion-color-primary); }
+.tile-actions { display: flex; gap: 8px; padding-top: 15px; border-top: 1px solid var(--app-line); }
+.task-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 9px 12px; border: 1px solid var(--app-line); border-radius: 9px; color: var(--app-muted); background: transparent; font-size: 12px; font-weight: 600; }
+.task-action:hover { background: var(--app-surface-alt); color: var(--app-text); }
+.task-action ion-icon { font-size: 16px; }
+.complete-action { border-color: transparent; color: var(--ion-color-primary); background: var(--app-primary-soft); }
+.delete-action { width: 40px; padding: 9px; margin-left: auto; border-color: transparent; }
+.delete-action:hover { color: var(--app-danger-text); background: var(--app-danger-soft); }
+@media (max-width: 600px) { .task-body { padding: 20px; } .task-action { min-height: 44px; } }
 </style>

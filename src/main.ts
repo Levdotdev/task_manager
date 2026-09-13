@@ -32,10 +32,14 @@ import '@ionic/vue/css/display.css';
 
 /* @import '@ionic/vue/css/palettes/dark.always.css'; */
 import '@ionic/vue/css/palettes/dark.class.css';
-import '@ionic/vue/css/palettes/dark.system.css';
 
 /* Theme variables */
 import './theme/variables.css';
+
+const savedTheme = localStorage.getItem('theme');
+document.documentElement.classList.toggle('ion-palette-dark',
+  savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+);
 
 const app = createApp(App)
   .use(IonicVue)
