@@ -3,7 +3,7 @@
     <div v-if="task.image" class="task-thumb"><img :src="task.image" :alt="`Photo for ${task.title}`" loading="lazy" /></div>
     <div class="task-body">
       <div class="badge-row"><span class="priority-badge" :class="task.priority"><span />{{ task.priority }} priority</span><span class="status-badge" :class="displayStatus.toLowerCase()">{{ displayStatus }}</span></div>
-      <div v-if="task.category || (task.recurrence && task.recurrence !== 'none') || task.reminders?.length" class="task-meta"><span v-if="task.category" class="category-badge">{{ task.category }}</span><span v-if="task.recurrence && task.recurrence !== 'none'"><ion-icon :icon="repeatOutline" aria-hidden="true" />{{ recurrenceLabel(task.recurrence) }}</span><span v-if="task.reminders?.length" :title="reminderLabel"><ion-icon :icon="notificationsOutline" aria-hidden="true" />{{ task.reminders.length }} {{ task.reminders.length === 1 ? 'reminder' : 'reminders' }}</span></div>
+      <div v-if="task.category || (task.recurrence && task.recurrence !== 'none') || task.reminders?.length" class="task-meta"><span v-if="task.category" class="category-badge">{{ categoryLabel(task.category) }}</span><span v-if="task.recurrence && task.recurrence !== 'none'"><ion-icon :icon="repeatOutline" aria-hidden="true" />{{ recurrenceLabel(task.recurrence) }}</span><span v-if="task.reminders?.length" :title="reminderLabel"><ion-icon :icon="notificationsOutline" aria-hidden="true" />{{ task.reminders.length }} {{ task.reminders.length === 1 ? 'reminder' : 'reminders' }}</span></div>
       <h3 class="task-title">{{ task.title }}</h3>
       <p class="task-description">{{ task.description }}</p>
       <p class="task-due" :class="{ overdue: displayStatus === 'Missed' }"><ion-icon :icon="calendarOutline" aria-hidden="true" /><time :datetime="task.due_date">{{ formattedDue }}</time></p>
@@ -28,7 +28,7 @@ import { computed } from 'vue';
 import { IonIcon } from '@ionic/vue';
 import { createOutline, trashOutline, checkmarkOutline, arrowUndoOutline, linkOutline, documentAttachOutline, calendarOutline, arrowForwardOutline, repeatOutline, notificationsOutline, reorderThreeOutline, arrowUpOutline, arrowDownOutline } from 'ionicons/icons';
 import { REMINDER_OPTIONS, type Task } from '@/models/task';
-import { taskFiles, taskLinks, recurrenceLabel, displayStatus as getDisplayStatus } from '@/utils/tasks';
+import { categoryLabel, taskFiles, taskLinks, recurrenceLabel, displayStatus as getDisplayStatus } from '@/utils/tasks';
 const props = defineProps<{ task: Task; now?: Date; manualOrder?: boolean; canMoveUp?: boolean; canMoveDown?: boolean; busy?: boolean }>();
 defineEmits<{ (e: 'edit'): void; (e: 'delete'): void; (e: 'complete'): void; (e: 'revert'): void; (e: 'move', direction: number): void }>();
 const arrowUpRight = arrowForwardOutline;

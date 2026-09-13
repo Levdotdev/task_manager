@@ -1,5 +1,5 @@
 <template>
-  <ion-modal :is-open="isOpen" :can-dismiss="!busy" :backdrop-dismiss="!busy"
+  <ion-modal :is-open="isOpen" :can-dismiss="canDismiss" :backdrop-dismiss="!busy"
     :class="['app-dialog', { 'app-dialog-wide': wide }]" @didDismiss="onDidDismiss">
     <section class="dialog-shell" :aria-labelledby="titleId">
       <header class="dialog-header">
@@ -21,15 +21,20 @@
 </template>
 
 <script setup lang="ts">
-import { useId } from 'vue';
+import { useId, onBeforeUnmount } from 'vue';
 import { IonModal, IonIcon, IonSpinner } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   isOpen: boolean; title: string; description?: string; icon?: string;
   confirmLabel?: string; busyLabel?: string; busy?: boolean; disabled?: boolean;
   danger?: boolean; wide?: boolean; hideFooter?: boolean;
 }>(), { confirmLabel: 'Confirm', busyLabel: 'Saving…' });
 const emit = defineEmits<{ (e: 'dismiss'): void; (e: 'confirm'): void; (e: 'closed'): void }>();
+let unmounting = false;
+// Block user cancellation during a save, but allow the owner to close or
+// unmount the overlay after authentication changes.
+function canDismiss() { return unmounting || !props.busy || !props.isOpen; }
+onBeforeUnmount(() => { unmounting = true; });
 function onDidDismiss() { emit('dismiss'); emit('closed'); }
 const titleId = `dialog-${useId()}`;
 </script>

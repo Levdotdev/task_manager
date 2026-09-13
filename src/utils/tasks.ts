@@ -1,4 +1,9 @@
-import { RECURRENCE_OPTIONS, REMINDER_OPTIONS, type Task, type TaskFile, type TaskLink, type DisplayStatus, type Recurrence } from '@/models/task';
+import { CATEGORY_OPTIONS, RECURRENCE_OPTIONS, REMINDER_OPTIONS, type Task, type TaskFile, type TaskLink, type DisplayStatus, type Recurrence } from '@/models/task';
+
+export function categoryLabel(value: string): string {
+  const option = CATEGORY_OPTIONS.find(o => o.value.toLowerCase() === value.toLowerCase());
+  return option ? `${option.emoji} ${value}` : value;
+}
 
 export function taskFiles(task: Pick<Task, 'files' | 'fileData' | 'fileName'>): TaskFile[] {
   if (Array.isArray(task.files)) return task.files;

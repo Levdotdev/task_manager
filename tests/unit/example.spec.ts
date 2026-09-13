@@ -14,6 +14,12 @@ const task: Task = { id: 'existing', title: 'Training report', description: 'Wri
 
 beforeEach(() => vi.resetAllMocks());
 describe('Task form', () => {
+  test('offers all six categories before any tasks have been saved', async () => {
+    const wrapper = mount(TaskForm, { global: { stubs } });
+    expect(wrapper.findAll('select[name="category"] option').map(o => o.text())).toEqual(['No category', '💼 Work', '👤 Personal', '📚 Study', '🛒 Errands', '💰 Finance', '📁 Projects', 'Custom category…']);
+    await wrapper.get('select[name="category"]').setValue('Study');
+    expect(wrapper.find('input[name="customCategory"]').exists()).toBe(false);
+  });
   test('editing preserves the task and attachments and uses the chosen priority', async () => {
     const wrapper = mount(TaskForm, { props: { task }, global: { stubs } });
     await flushPromises();
@@ -27,7 +33,8 @@ describe('Task form', () => {
   test('saves multiple files, titled links, a category, recurrence, and reminder offsets', async () => {
     const wrapper = mount(TaskForm, { props: { task }, global: { stubs } });
     await flushPromises();
-    await wrapper.get('input[name="category"]').setValue('Learning');
+    await wrapper.get('select[name="category"]').setValue('__custom__');
+    await wrapper.get('input[name="customCategory"]').setValue('Learning');
     await wrapper.get('select[name="recurrence"]').setValue('weekdays');
     await wrapper.get('input[type="checkbox"][value="15"]').setValue(true);
     await wrapper.get('input[name="linkTitle-0"]').setValue('Report guide');

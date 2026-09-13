@@ -6,11 +6,11 @@ const mocks = vi.hoisted(() => ({
   listener: undefined as ((tasks: Task[]) => void) | undefined,
   intent: null as { value: string | null } | null,
   state: { native: false, granted: false, enabling: false, exactAllowed: true, error: '', deferred: 0 },
-  sync: vi.fn(), consume: vi.fn(),
+  sync: vi.fn(), consume: vi.fn(), complete: vi.fn(),
 }));
 vi.mock('@/services/taskService', () => ({
   subscribeToTasks: (callback: (tasks: Task[]) => void) => { mocks.listener = callback; return () => undefined; },
-  markTaskCompleted: vi.fn(), revertTaskToPending: vi.fn(), deleteTask: vi.fn(), reorderTasks: vi.fn(), addTask: vi.fn(), updateTask: vi.fn(),
+  markTaskCompleted: mocks.complete, revertTaskToPending: vi.fn(), deleteTask: vi.fn(), reorderTasks: vi.fn(), addTask: vi.fn(), updateTask: vi.fn(),
 }));
 vi.mock('@/services/reminderService', async () => {
   const { ref } = await import('vue');
@@ -19,18 +19,30 @@ vi.mock('@/services/reminderService', async () => {
 });
 const stubs = {
   IonIcon: true,
-  AppDialog: { name: 'AppDialog', props: ['isOpen'], emits: ['dismiss', 'closed'], template: '<section v-if="isOpen" data-test="dialog"><slot /><button type="button" @click="$emit(\'dismiss\')">Close dialog</button></section>' },
+  AppDialog: { name: 'AppDialog', props: ['isOpen'], emits: ['dismiss', 'closed', 'confirm'], template: '<section v-if="isOpen" data-test="dialog"><slot /><button type="button" @click="$emit(\'dismiss\')">Close dialog</button></section>' },
   TaskFormComponent: { name: 'TaskFormComponent', props: ['task'], template: '<p>Editing {{ task?.title }}</p>' },
-  TaskTile: { props: ['task'], emits: ['edit'], template: '<article><span>{{ task.title }}</span><button type="button" @click="$emit(\'edit\')">Edit</button></article>' },
+  TaskTile: { props: ['task'], emits: ['edit', 'complete'], template: '<article><span>{{ task.title }}</span><button type="button" @click="$emit(\'edit\')">Edit</button><button type="button" @click="$emit(\'complete\')">Complete</button></article>' },
   TaskCalendar: true,
 };
 const first: Task = { id: 'first', title: 'Weekly report', description: 'Notes', priority: 'medium', due_date: '2099-04-10T17:00', status: 'Pending' };
 const second: Task = { ...first, id: 'second', title: 'Project brief' };
 let wrapper: VueWrapper | undefined;
-function render(realForm = false) { wrapper = mount(TaskGallery, { global: { stubs: realForm ? { ...stubs, TaskFormComponent: false, CameraComponent: true, IonSpinner: true } : stubs } }); return wrapper; }
+function render(realForm = false, realCalendar = false) { wrapper = mount(TaskGallery, { global: { stubs: { ...stubs, ...(realForm ? { TaskFormComponent: false, CameraComponent: true, IonSpinner: true } : {}), ...(realCalendar ? { TaskCalendar: false } : {}) } } }); return wrapper; }
 beforeEach(() => { vi.clearAllMocks(); mocks.listener = undefined; mocks.intent!.value = null; mocks.state.native = false; mocks.consume.mockImplementation((id: string) => { if (mocks.intent!.value === id) mocks.intent!.value = null; }); });
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.useRealTimers(); });
 describe('Reminder navigation in the task workspace', () => {
+  test('the calendar counts future daily dates and completes the selected date against its series', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-11T12:00'));
+    const view = render(false, true); mocks.listener!([{ ...first, due_date: '2026-09-11T17:00', recurrence: 'daily', category: 'Work' }]); await flushPromises();
+    expect(view.get('select[aria-label="Filter by category"]').text()).toContain('💼 Work');
+    await view.findAll('.view-switch button')[1].trigger('click');
+    const tomorrow = view.findAll('.calendar-day').find(day => day.attributes('aria-label')?.startsWith('Saturday, September 12, 2026'))!;
+    expect(tomorrow.attributes('aria-label')).toContain('1 task'); await tomorrow.trigger('click');
+    expect(view.findAll('article')).toHaveLength(1);
+    await view.findAll('article button')[1].trigger('click');
+    view.findAllComponents({ name: 'AppDialog' })[1].vm.$emit('confirm'); await flushPromises();
+    expect(mocks.complete).toHaveBeenCalledWith('first', '2026-09-12T17:00');
+  });
   test('a startup tap opens its task only after the task snapshot arrives', async () => {
     mocks.intent!.value = 'first'; const view = render();
     expect(view.find('[data-test="dialog"]').exists()).toBe(false);

@@ -1,5 +1,6 @@
 import type { LocalNotificationSchema } from '@capacitor/local-notifications';
 import { REMINDER_OPTIONS, type Task } from '@/models/task';
+import { expandRecurringTasks } from './recurrence';
 
 export const REMINDER_SOURCE = 'task-manager-reminder';
 export function reminderId(key: string): number {
@@ -10,8 +11,10 @@ export function reminderId(key: string): number {
 export function buildReminderPlan(tasks: Task[], uid: string, now = new Date(), limit = 64, reservedIds: number[] = []) {
   const notifications: LocalNotificationSchema[] = [];
   const usedIds = new Set<number>(reservedIds);
+  const end = new Date(now); end.setFullYear(end.getFullYear() + 1);
+  const occurrences = expandRecurringTasks(tasks, now, end);
   // Sorting first also makes collision resolution stable across task snapshots.
-  for (const task of [...tasks].sort((a, b) => a.id.localeCompare(b.id))) {
+  for (const task of occurrences.sort((a, b) => a.id.localeCompare(b.id))) {
     if (task.status === 'Completed') continue;
     const due = new Date(task.due_date).getTime();
     if (!Number.isFinite(due)) continue;

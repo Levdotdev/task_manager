@@ -14,29 +14,30 @@
     <div v-if="reminderState.native && (hasReminders || reminderState.error)" class="reminder-banner"><ion-icon :icon="notificationsOutline" aria-hidden="true" /><div><strong>{{ reminderState.granted ? 'Device reminders are on.' : 'Give your deadlines a gentle nudge.' }}</strong><p>{{ reminderState.error || (!reminderState.granted ? 'Allow notifications to receive your saved reminders on this device.' : !reminderState.exactAllowed ? 'Allow precise alarms in Android settings for reminders at the selected time.' : reminderState.deferred ? `${reminderState.deferred} later reminders will be scheduled as you reopen the app. The nearest reminders are ready.` : 'Upcoming task reminders are scheduled on this device.') }}</p></div><button v-if="!reminderState.granted" class="secondary-button" type="button" :disabled="reminderState.enabling" @click="enableDeviceReminders">{{ reminderState.enabling ? 'Enabling…' : 'Enable reminders' }}</button><button v-else-if="!reminderState.exactAllowed" class="secondary-button" type="button" @click="openExactReminderSettings">Open settings</button></div>
     <section class="task-list-section" aria-labelledby="task-list-title">
       <div class="list-toolbar">
-        <div class="list-heading"><h2 id="task-list-title">Your tasks</h2><span aria-live="polite">{{ filteredTasks.length }} {{ filteredTasks.length === 1 ? 'task' : 'tasks' }}</span></div>
+        <div class="list-heading"><h2 id="task-list-title">Your tasks</h2><span aria-live="polite">{{ visibleCount }} {{ visibleCount === 1 ? 'task' : 'tasks' }}</span></div>
         <div class="view-switch" aria-label="Task view"><button type="button" :class="{ active: view === 'list' }" :aria-pressed="view === 'list'" @click="view = 'list'"><ion-icon :icon="gridOutline" aria-hidden="true" />List</button><button type="button" :class="{ active: view === 'calendar' }" :aria-pressed="view === 'calendar'" @click="view = 'calendar'"><ion-icon :icon="calendarOutline" aria-hidden="true" />Calendar</button></div>
       </div>
       <div class="filter-panel">
         <label class="search-field"><ion-icon :icon="searchOutline" aria-hidden="true" /><input v-model="query" name="taskSearch" type="search" aria-label="Search tasks, notes, categories, files and links" placeholder="Search tasks, notes, files, links…" /><button v-if="query" type="button" aria-label="Clear search" @click="query = ''"><ion-icon :icon="closeOutline" aria-hidden="true" /></button></label>
         <div class="filter-controls">
-          <label class="field"><span>Category</span><select v-model="categoryFilter" aria-label="Filter by category"><option value="all">All categories</option><option value="uncategorized">Uncategorized</option><option v-for="name in categories" :key="name" :value="`category:${name}`">{{ name }}</option></select></label>
+          <label class="field"><span>Category</span><select v-model="categoryFilter" aria-label="Filter by category"><option value="all">All categories</option><option value="uncategorized">Uncategorized</option><option v-for="name in categories" :key="name" :value="`category:${name}`">{{ categoryLabel(name) }}</option></select></label>
           <label class="field"><span>Priority</span><select v-model="priorityFilter" aria-label="Filter by priority"><option value="all">All priorities</option><option value="high">High priority</option><option value="medium">Medium priority</option><option value="low">Low priority</option></select></label>
           <label class="field"><span>Repeat</span><select v-model="repeatFilter" aria-label="Filter by repeat"><option value="all">All tasks</option><option value="recurring">Recurring tasks</option><option value="none">Does not repeat</option><option v-for="option in RECURRENCE_OPTIONS.filter(o => o.value !== 'none')" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
           <label v-if="view === 'list'" class="field"><span>Sort by</span><select v-model="sort" aria-label="Sort tasks"><option value="date">Due date</option><option value="priority">Priority</option><option value="manual">Your order</option></select></label>
         </div>
         <div class="filter-bottom"><div class="status-filter" aria-label="Filter by status"><button v-for="status in statuses" :key="status" type="button" :class="{ active: filter === status }" :aria-pressed="filter === status" @click="filter = status">{{ status }}</button></div><button v-if="hasFilters" class="clear-filters" type="button" @click="clearFilters">Clear filters</button></div>
       </div>
+      <p v-if="view === 'list' && sort !== 'manual' && tasks.some(t => t.recurrence && t.recurrence !== 'none')" class="order-hint">Upcoming repeats for the next 30 days. Calendar shows repeats for any month.</p>
       <p v-if="loadError" class="form-error" role="alert">{{ loadError }}</p>
       <p v-if="orderError" class="form-error" role="alert">{{ orderError }}</p>
       <p class="sr-only" role="status">{{ orderMessage }}</p>
       <TaskCalendar v-if="view === 'calendar'" :tasks="matchingTasks" :selected-date="selectedDate" :now="now" @select="selectedDate = $event" />
       <div v-if="view === 'calendar'" class="selected-day-heading"><h3>{{ formatDateHeader(selectedDate) }}</h3><button class="clear-filters" type="button" @click="newTask">Add a task this day</button></div>
       <template v-if="view === 'list' && sort === 'manual' && filteredTasks.length">
-        <p class="order-hint"><ion-icon :icon="reorderThreeOutline" aria-hidden="true" />{{ orderBusy ? 'Saving your order…' : 'Drag a card by its handle, or use its arrow buttons.' }}</p>
-        <Draggable v-model="manualTasks" class="task-grid manual-grid" item-key="id" handle=".drag-handle" :animation="150" :delay="120" :delay-on-touch-only="true" :disabled="orderBusy" ghost-class="task-ghost" @change="saveOrder"><template #item="{ element, index }"><TaskTile :task="element" :now="now" manual-order :busy="orderBusy" :can-move-up="index > 0" :can-move-down="index < manualTasks.length - 1" @move="moveTask(index, $event)" @edit="modalTask = element" @complete="openConfirmation('complete', element)" @revert="openConfirmation('revert', element)" @delete="openConfirmation('delete', element)" /></template></Draggable>
+        <p class="order-hint"><ion-icon :icon="reorderThreeOutline" aria-hidden="true" />{{ orderBusy ? 'Saving your order…' : 'Drag a card by its handle, or use its arrow buttons. Recurring schedules appear once here; Calendar shows every date.' }}</p>
+        <Draggable v-model="manualTasks" class="task-grid manual-grid" item-key="id" handle=".drag-handle" :animation="150" :delay="120" :delay-on-touch-only="true" :disabled="orderBusy" ghost-class="task-ghost" @change="saveOrder"><template #item="{ element, index }"><TaskTile :task="element" :now="now" manual-order :busy="orderBusy" :can-move-up="index > 0" :can-move-down="index < manualTasks.length - 1" @move="moveTask(index, $event)" @edit="editTask(element)" @complete="openConfirmation('complete', element)" @revert="openConfirmation('revert', element)" @delete="openConfirmation('delete', element)" /></template></Draggable>
       </template>
-      <template v-else><div v-for="group in visibleGroups" :key="group.date" class="date-group"><div v-if="view === 'list'" class="date-heading"><h3>{{ group.date === 'priority' ? 'Highest priority first' : formatDateHeader(group.date) }}</h3><span>{{ group.tasks.length }}</span><div class="date-rule" /></div><div class="task-grid"><TaskTile v-for="task in group.tasks" :key="task.id" :task="task" :now="now" @edit="modalTask = task" @complete="openConfirmation('complete', task)" @revert="openConfirmation('revert', task)" @delete="openConfirmation('delete', task)" /></div></div></template>
+      <template v-else><div v-for="group in visibleGroups" :key="group.date" class="date-group"><div v-if="view === 'list'" class="date-heading"><h3>{{ group.date === 'priority' ? 'Highest priority first' : formatDateHeader(group.date) }}</h3><span>{{ group.tasks.length }}</span><div class="date-rule" /></div><div class="task-grid"><TaskTile v-for="task in group.tasks" :key="task.id" :task="task" :now="now" @edit="editTask(task)" @complete="openConfirmation('complete', task)" @revert="openConfirmation('revert', task)" @delete="openConfirmation('delete', task)" /></div></div></template>
       <div v-if="filteredTasks.length === 0 && !loadError" class="empty-state"><span class="empty-icon"><ion-icon :icon="emptyState.icon" aria-hidden="true" /></span><h3>{{ emptyState.title }}</h3><p>{{ emptyState.description }}</p><button v-if="hasFilters" class="secondary-button" type="button" @click="clearFilters">Clear filters</button><button v-else class="secondary-button" type="button" @click="newTask"><ion-icon :icon="addOutline" aria-hidden="true" />Add a task</button></div>
     </section>
     <p class="workspace-footer"><ion-icon :icon="leafOutline" aria-hidden="true" />Small steps still move you forward.</p>
@@ -50,8 +51,9 @@ import { IonIcon } from '@ionic/vue';
 import Draggable from 'vuedraggable';
 import { addOutline, timeOutline, alertCircleOutline, checkmarkCircleOutline, createOutline, trashOutline, arrowUndoOutline, documentTextOutline, leafOutline, checkboxOutline, gridOutline, calendarOutline, searchOutline, closeOutline, reorderThreeOutline, notificationsOutline } from 'ionicons/icons';
 import { subscribeToTasks, markTaskCompleted, revertTaskToPending, deleteTask, reorderTasks } from '@/services/taskService';
-import { RECURRENCE_OPTIONS, type Task, type TaskPriority, type Recurrence } from '@/models/task';
-import { displayStatus, matchesSearch, taskDateKey, localDateKey, localDateTime, manualTaskOrder, mergeVisibleOrder } from '@/utils/tasks';
+import { CATEGORY_OPTIONS, RECURRENCE_OPTIONS, type Task, type TaskPriority, type Recurrence } from '@/models/task';
+import { categoryLabel, displayStatus, matchesSearch, taskDateKey, localDateKey, localDateTime, manualTaskOrder, mergeVisibleOrder } from '@/utils/tasks';
+import { expandRecurringTasks, findTaskOccurrence } from '@/utils/recurrence';
 import { reminderState, syncTaskReminders, enableDeviceReminders, openExactReminderSettings, pendingReminderTask, consumeReminderTask } from '@/services/reminderService';
 import TaskFormComponent from './TaskFormComponent.vue';
 import TaskTile from './TaskTile.vue';
@@ -83,16 +85,27 @@ type Action = 'delete' | 'complete' | 'revert';
 const confirmation = ref<{ action: Action; task: Task } | null>(null);
 const actionBusy = ref(false);
 const actionError = ref('');
-const categories = computed(() => [...new Set(tasks.value.map(t => t.category?.trim()).filter((name): name is string => !!name))].sort((a, b) => a.localeCompare(b)));
+const categories = computed(() => [...new Set([...CATEGORY_OPTIONS.map(o => o.value), ...tasks.value.map(t => t.category?.trim()).filter((name): name is string => !!name)])]);
+const listTasks = computed(() => {
+  const start = new Date(now.value); start.setHours(0, 0, 0, 0);
+  const end = new Date(start); end.setDate(end.getDate() + 30);
+  return expandRecurringTasks(tasks.value, start, end);
+});
+const workspaceTasks = computed(() => {
+  if (view.value === 'list') return listTasks.value;
+  const start = new Date(`${selectedDate.value.slice(0, 7)}-01T00:00`); start.setDate(start.getDate() - start.getDay());
+  const end = new Date(start); end.setDate(end.getDate() + 42);
+  return expandRecurringTasks(tasks.value, start, end);
+});
 const hasReminders = computed(() => tasks.value.some(t => t.status !== 'Completed' && t.reminders?.length));
 const hasFilters = computed(() => !!query.value.trim() || categoryFilter.value !== 'all' || priorityFilter.value !== 'all' || repeatFilter.value !== 'all' || filter.value !== 'All');
-const counts = computed(() => ({ Pending: tasks.value.filter(t => displayStatus(t, now.value) === 'Pending').length, Missed: tasks.value.filter(t => displayStatus(t, now.value) === 'Missed').length, Completed: tasks.value.filter(t => t.status === 'Completed').length }));
+const counts = computed(() => ({ Pending: listTasks.value.filter(t => displayStatus(t, now.value) === 'Pending').length, Missed: listTasks.value.filter(t => displayStatus(t, now.value) === 'Missed').length, Completed: listTasks.value.filter(t => t.status === 'Completed').length }));
 const summaries = computed(() => [
   { status: 'Pending' as const, label: 'On your list', count: counts.value.Pending, icon: timeOutline, tone: 'pending', caption: 'Ready when you are' },
   { status: 'Missed' as const, label: 'Needs attention', count: counts.value.Missed, icon: alertCircleOutline, tone: 'missed', caption: 'A chance to catch up' },
   { status: 'Completed' as const, label: 'All wrapped up', count: counts.value.Completed, icon: checkmarkCircleOutline, tone: 'completed', caption: 'Look how far you’ve come' },
 ]);
-const matchingTasks = computed(() => tasks.value.filter(task => {
+const matchingTasks = computed(() => workspaceTasks.value.filter(task => {
   if (filter.value !== 'All' && displayStatus(task, now.value) !== filter.value) return false;
   if (categoryFilter.value === 'uncategorized' && task.category) return false;
   if (categoryFilter.value.startsWith('category:') && task.category !== categoryFilter.value.slice(9)) return false;
@@ -119,7 +132,15 @@ const allOrderedTasks = computed(() => {
   const positions = new Map(optimisticOrder.value.map((id, index) => [id, index]));
   return ordered.sort((a, b) => (positions.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (positions.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 });
-const manualTasks = computed({ get: () => { const visibleIds = new Set(filteredTasks.value.map(t => t.id)); return allOrderedTasks.value.filter(t => visibleIds.has(t.id)); }, set: (visible: Task[]) => { optimisticOrder.value = mergeVisibleOrder(allOrderedTasks.value.map(t => t.id), visible.map(t => t.id)); } });
+const manualTasks = computed({
+  get: () => {
+    const visible = new Map<string, Task>();
+    for (const task of [...filteredTasks.value].sort(byDate)) { const source = task.occurrenceSourceId || task.id; if (!visible.has(source)) visible.set(source, task); }
+    return allOrderedTasks.value.flatMap(t => visible.has(t.id) ? [visible.get(t.id)!] : []);
+  },
+  set: (visible: Task[]) => { optimisticOrder.value = mergeVisibleOrder(allOrderedTasks.value.map(t => t.id), visible.map(t => t.occurrenceSourceId || t.id)); },
+});
+const visibleCount = computed(() => view.value === 'list' && sort.value === 'manual' ? manualTasks.value.length : filteredTasks.value.length);
 const emptyState = computed(() => {
   if (query.value || categoryFilter.value !== 'all' || priorityFilter.value !== 'all' || repeatFilter.value !== 'all') return { icon: searchOutline, title: 'No tasks match just yet.', description: 'Try another search or clear a filter to see more tasks.' };
   if (view.value === 'calendar') return { icon: calendarOutline, title: 'A little room in your day.', description: 'There are no tasks for this date with your current status filter.' };
@@ -128,14 +149,15 @@ const emptyState = computed(() => {
   return { icon: leafOutline, title: 'A little room for your next step.', description: 'Add a task to start planning your day.' };
 });
 const confirmationDetails = computed(() => {
-  if (confirmation.value?.action === 'delete') return { title: 'Delete this task?', description: 'This will remove the task and its attachments permanently. Deleting a pending recurring task stops its future repeats.', icon: trashOutline, label: 'Delete task' };
+  if (confirmation.value?.action === 'delete') return { title: 'Delete this task?', description: confirmation.value.task.occurrenceSourceId ? confirmation.value.task.status === 'Completed' ? 'Remove this completed date. Other dates in the schedule will stay.' : 'Remove this date and stop its future repeats. Earlier dates and completed history will stay.' : 'This will remove the task and its attachments permanently.', icon: trashOutline, label: 'Delete task' };
   if (confirmation.value?.action === 'revert') return { title: 'Back on your list?', description: confirmation.value.task.nextTaskId ? 'Move this occurrence back to pending. Its next occurrence will stay on your list.' : 'Move this task back to pending so you can work on it again.', icon: arrowUndoOutline, label: 'Move to pending' };
-  return { title: 'Another task, done.', description: confirmation.value?.task.recurrence && confirmation.value.task.recurrence !== 'none' ? 'Mark this occurrence as completed. The next upcoming occurrence will be added to your list.' : 'Mark this task as completed and celebrate a little progress.', icon: checkmarkCircleOutline, label: 'Mark as completed' };
+  return { title: 'Another task, done.', description: confirmation.value?.task.occurrenceSourceId ? 'Mark this date as completed. Other dates in the schedule will stay pending.' : 'Mark this task as completed and celebrate a little progress.', icon: checkmarkCircleOutline, label: 'Mark as completed' };
 });
 function clearFilters() { query.value = ''; categoryFilter.value = 'all'; priorityFilter.value = 'all'; repeatFilter.value = 'all'; filter.value = 'All'; }
 function newTask() { defaultDueDate.value = view.value === 'calendar' ? `${selectedDate.value}T17:00` : localDateTime(new Date(now.value.getTime() + 3600_000)); modalTask.value = 'new'; }
 function formatDateHeader(date: string) { return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }); }
 function closeTaskForm() { if (!formSaving.value) modalTask.value = null; }
+function editTask(task: Task) { modalTask.value = tasks.value.find(t => t.id === task.occurrenceSourceId) || task; }
 function openConfirmation(action: Action, task: Task) { actionError.value = ''; confirmation.value = { action, task }; }
 function closeConfirmation() { if (!actionBusy.value) { confirmation.value = null; actionError.value = ''; } }
 async function saveOrder() {
@@ -150,7 +172,9 @@ async function moveTask(index: number, direction: number) { const ordered = [...
 async function confirmAction() {
   if (!confirmation.value || actionBusy.value) return;
   const { action, task } = confirmation.value; actionBusy.value = true; actionError.value = '';
-  try { if (action === 'delete') await deleteTask(task.id); else if (action === 'complete') await markTaskCompleted(task.id); else await revertTaskToPending(task.id); confirmation.value = null; }
+  const id = task.occurrenceSourceId || task.id;
+  const due = task.occurrenceSourceId ? task.due_date : undefined;
+  try { if (action === 'delete') await deleteTask(id, due); else if (action === 'complete') await markTaskCompleted(id, due); else await revertTaskToPending(id, due); confirmation.value = null; }
   catch { actionError.value = 'We couldn’t update this task. Check your connection and try again.'; }
   finally { actionBusy.value = false; }
 }
@@ -161,8 +185,8 @@ watch([modalTask, confirmation], ([task, action]) => {
 watch([tasks, tasksLoaded, pendingReminderTask, modalTask, confirmation, taskDialogActive, confirmationDialogActive], () => {
   const taskId = pendingReminderTask.value;
   if (!taskId || !tasksLoaded.value || modalTask.value !== null || confirmation.value !== null || taskDialogActive.value || confirmationDialogActive.value) return;
-  const task = tasks.value.find(t => t.id === taskId);
-  if (task) { clearFilters(); view.value = 'list'; modalTask.value = task; }
+  const task = findTaskOccurrence(tasks.value, taskId);
+  if (task) { clearFilters(); view.value = 'list'; editTask(task); }
   consumeReminderTask(taskId);
 }, { immediate: true });
 let reminderTimer: ReturnType<typeof setTimeout> | undefined;

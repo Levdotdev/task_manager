@@ -31,6 +31,28 @@ describe('Task persistence', () => {
   test('stores only order fields in a reorder operation', async () => { await reorderTasks(['original', 'other']); expect(memory.updates[0]).toEqual({ path: 'tasks/user', values: { 'original/order': 0, 'other/order': 1 } }); });
 });
 describe('Recurring task completion', () => {
+  test('completing and reverting a displayed date persists only that date on its series', async () => {
+    await markTaskCompleted('original', '2099-02-28T17:00');
+    await markTaskCompleted('original', '2099-02-28T17:00');
+    expect(Object.keys(records())).toHaveLength(1);
+    expect(records().original.status).toBe('Pending');
+    expect(records().original.occurrenceStates?.['209902281700'].status).toBe('Completed');
+    await revertTaskToPending('original', '2099-02-28T17:00');
+    expect(records().original.occurrenceStates?.['209902281700'].status).toBe('Pending');
+  });
+  test('deleting a pending date stops future repeats while retaining earlier completed history', async () => {
+    await markTaskCompleted('original', original.due_date);
+    await deleteTask('original', '2099-02-28T17:00');
+    expect(records().original.recurrenceUntil).toBe('2099-02-28T17:00');
+    expect(records().original.occurrenceStates?.['209901311700'].status).toBe('Completed');
+    await expect(markTaskCompleted('original', '2099-03-31T17:00')).rejects.toThrow('no longer scheduled');
+  });
+  test('deleting completed history does not restore that date or stop the schedule', async () => {
+    await markTaskCompleted('original', '2099-02-28T17:00');
+    await deleteTask('original', '2099-02-28T17:00');
+    expect(records().original.occurrenceStates?.['209902281700'].status).toBe('Skipped');
+    expect(records().original.recurrenceUntil).toBeUndefined();
+  });
   test('keeps history and inherits attachments, category, and reminders in the next occurrence', async () => {
     await markTaskCompleted('original');
     expect(records().original.status).toBe('Completed');

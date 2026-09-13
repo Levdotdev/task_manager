@@ -44,6 +44,7 @@ const stopAuthListener = onAuthChange((u) => {
   unsubscribeRecord = null;
   userRecord.value = null;
   if (u) unsubscribeRecord = subscribeToUserRecord(u.uid, (record) => { userRecord.value = record; });
+  else { showLogout.value = false; showLogHours.value = false; }
 });
 onUnmounted(() => { stopAuthListener(); unsubscribeRecord?.(); });
 const initials = computed(() => (user.value?.displayName || user.value?.email || 'You').split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase());

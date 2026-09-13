@@ -7,10 +7,10 @@
       <label class="field"><span>Priority</span><select v-model="priority" name="priority" :disabled="saving"><option value="low">Low priority</option><option value="medium">Medium priority</option><option value="high">High priority</option></select></label>
     </div>
     <div class="form-row">
-      <label class="field"><span>Category <small>Optional</small></span><input v-model="category" name="category" :list="categoryListId" placeholder="Work, learning, personal…" :disabled="saving" /><datalist :id="categoryListId"><option v-for="name in categories" :key="name" :value="name" /></datalist></label>
+      <label class="field"><span>Category <small>Optional</small></span><select v-model="categorySelection" name="category" :disabled="saving"><option value="">No category</option><option v-for="name in categoryNames" :key="name" :value="name">{{ categoryLabel(name) }}</option><option value="__custom__">Custom category…</option></select><input v-if="customCategory" v-model="category" name="customCategory" placeholder="Category name" :disabled="saving" aria-label="Custom category name" /></label>
       <label class="field"><span>Repeat</span><select v-model="recurrence" name="recurrence" :disabled="saving"><option v-for="option in RECURRENCE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
     </div>
-    <p v-if="recurrence !== 'none'" class="field-hint">Completing this task adds its next occurrence and keeps your completed history.</p>
+    <p v-if="recurrence !== 'none'" class="field-hint">Repeats appear automatically on their dates in the calendar. Complete each date separately. Editing this task updates its recurring schedule.</p>
     <fieldset class="reminder-section" :disabled="saving">
       <legend><ion-icon :icon="notificationsOutline" aria-hidden="true" />Remind me before it’s due</legend>
       <div class="reminder-options"><label v-for="option in REMINDER_OPTIONS" :key="option.value" :class="{ checked: reminders.includes(option.value) }"><input v-model="reminders" type="checkbox" :value="option.value" /><span>{{ option.label }}</span></label></div>
@@ -40,24 +40,26 @@
   </form>
 </template>
 <script setup lang="ts">
-import { ref, computed, onMounted, useId } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { IonIcon, IonSpinner } from '@ionic/vue';
 import { attachOutline, documentAttachOutline, cameraOutline, checkmarkOutline, notificationsOutline, addOutline, closeOutline } from 'ionicons/icons';
 import { addTask, updateTask } from '@/services/taskService';
-import { REMINDER_OPTIONS, RECURRENCE_OPTIONS, type Task, type TaskFile, type TaskLink, type TaskPriority, type Recurrence, type ReminderMinutes } from '@/models/task';
-import { taskFiles, taskLinks, localDateTime, attachmentBytes, MAX_ATTACHMENT_BYTES, MAX_FILE_BYTES, formatFileSize } from '@/utils/tasks';
+import { CATEGORY_OPTIONS, REMINDER_OPTIONS, RECURRENCE_OPTIONS, type Task, type TaskFile, type TaskLink, type TaskPriority, type Recurrence, type ReminderMinutes } from '@/models/task';
+import { categoryLabel, taskFiles, taskLinks, localDateTime, attachmentBytes, MAX_ATTACHMENT_BYTES, MAX_FILE_BYTES, formatFileSize } from '@/utils/tasks';
 import { reminderState, enableDeviceReminders } from '@/services/reminderService';
 import { webPathToDataUrl, fileToDataUrl } from '@/utils/media';
 import CameraComponent from './CameraComponent.vue';
 const props = withDefaults(defineProps<{ task?: Task | null; categories?: string[]; defaultDueDate?: string }>(), { categories: () => [], defaultDueDate: '' });
 const emit = defineEmits<{ (e: 'taskSaved'): void; (e: 'savingChange', saving: boolean): void; (e: 'cancel'): void }>();
 const isEditing = computed(() => !!props.task);
-const categoryListId = useId();
 const title = ref('');
 const description = ref('');
 const dueDate = ref(props.defaultDueDate);
 const priority = ref<TaskPriority>('medium');
 const category = ref('');
+const customCategory = ref(false);
+const categoryNames = computed(() => [...new Set([...CATEGORY_OPTIONS.map(o => o.value), ...props.categories, ...(props.task?.category ? [props.task.category] : [])])]);
+const categorySelection = computed({ get: () => customCategory.value ? '__custom__' : category.value, set: (value: string) => { customCategory.value = value === '__custom__'; category.value = customCategory.value ? '' : value; } });
 const recurrence = ref<Recurrence>('none');
 const reminders = ref<ReminderMinutes[]>([]);
 const photoPreview = ref('');

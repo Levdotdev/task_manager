@@ -25,6 +25,10 @@ export interface Task {
   reminders?: ReminderMinutes[];
   recurrence?: Recurrence;
   recurrenceAnchorDay?: number;
+  recurrenceUntil?: string;
+  occurrenceStates?: Record<string, { due_date: string; status: 'Pending' | 'Completed' | 'Skipped'; completedAt?: string }>;
+  // Present only on a displayed occurrence; actions persist against its series.
+  occurrenceSourceId?: string;
   seriesId?: string;
   nextDueDate?: string;
   nextTaskId?: string;
@@ -53,6 +57,12 @@ export interface NewTask {
   fileData?: string;
 }
 export type TaskEdits = NewTask;
+
+export const CATEGORY_OPTIONS = [
+  { value: 'Work', emoji: '💼' }, { value: 'Personal', emoji: '👤' },
+  { value: 'Study', emoji: '📚' }, { value: 'Errands', emoji: '🛒' },
+  { value: 'Finance', emoji: '💰' }, { value: 'Projects', emoji: '📁' },
+];
 
 export const REMINDER_OPTIONS: { value: ReminderMinutes; label: string }[] = [
   { value: 5, label: '5 min' }, { value: 15, label: '15 min' },

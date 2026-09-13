@@ -2,6 +2,7 @@ import { db, auth } from '@/firebase';
 import { ref as databaseRef, push, set, remove, update, onValue, runTransaction, type Unsubscribe } from 'firebase/database';
 import type { Task, NewTask, TaskEdits } from '@/models/task';
 import { normalizeTask, taskFiles, taskLinks, nextDueDate, attachmentBytes, MAX_ATTACHMENT_BYTES } from '@/utils/tasks';
+import { isOccurrence, occurrenceKey } from '@/utils/recurrence';
 export type { Task, NewTask, TaskEdits } from '@/models/task';
 function requireUid(): string {
   const uid = auth.currentUser?.uid;
@@ -33,14 +34,26 @@ export async function updateTask(taskId: string, edits: TaskEdits) {
     return {
       ...current, ...values,
       recurrenceAnchorDay: edits.due_date === current.due_date ? current.recurrenceAnchorDay || new Date(edits.due_date).getDate() : new Date(edits.due_date).getDate(),
+      recurrenceUntil: edits.due_date !== current.due_date || edits.recurrence !== current.recurrence ? null : current.recurrenceUntil || null,
       // Clear legacy fields so removing a migrated attachment stays removed.
       link: null, fileName: null, fileData: null,
     };
   });
   if (!result.snapshot.exists()) throw new Error('Task no longer exists');
 }
-export async function markTaskCompleted(taskId: string) {
+export async function markTaskCompleted(taskId: string, occurrenceDueDate?: string) {
   const uid = requireUid();
+  if (occurrenceDueDate) {
+    const key = occurrenceKey(occurrenceDueDate);
+    const result = await runTransaction(taskRef(uid, taskId), (current: Task | null) => {
+      if (!current) return current;
+      if (current.occurrenceStates?.[key]?.status === 'Completed') return current;
+      if ((!isOccurrence(current, occurrenceDueDate) && current.occurrenceStates?.[key]?.status !== 'Pending') || current.occurrenceStates?.[key]?.status === 'Skipped') throw new Error('Occurrence is no longer scheduled');
+      return { ...current, occurrenceStates: { ...current.occurrenceStates, [key]: { due_date: occurrenceDueDate, status: 'Completed', completedAt: new Date().toISOString() } } };
+    });
+    if (!result.snapshot.exists()) throw new Error('Task no longer exists');
+    return;
+  }
   const result = await runTransaction(taskRef(uid, taskId), (current: Task | null) => {
     if (!current || current.status === 'Completed') return current;
     const task = normalizeTask(taskId, current);
@@ -74,10 +87,32 @@ async function createNextOccurrence(uid: string, task: Task) {
   await runTransaction(taskRef(uid, task.nextTaskId!), current => current || nextTask);
   await update(taskRef(uid, task.id), { nextTaskCreated: true });
 }
-export async function revertTaskToPending(taskId: string) {
-  await update(taskRef(requireUid(), taskId), { status: 'Pending', completedAt: null });
+export async function revertTaskToPending(taskId: string, occurrenceDueDate?: string) {
+  const uid = requireUid();
+  if (occurrenceDueDate) {
+    const result = await runTransaction(taskRef(uid, taskId), (current: Task | null) => {
+      if (!current) return current;
+      const key = occurrenceKey(occurrenceDueDate);
+      if (!isOccurrence(current, occurrenceDueDate) && current.occurrenceStates?.[key]?.status !== 'Completed') throw new Error('Occurrence no longer exists');
+      return { ...current, occurrenceStates: { ...current.occurrenceStates, [key]: { due_date: occurrenceDueDate, status: 'Pending' } } };
+    });
+    if (!result.snapshot.exists()) throw new Error('Task no longer exists');
+  } else await update(taskRef(uid, taskId), { status: 'Pending', completedAt: null });
 }
-export async function deleteTask(taskId: string) { await remove(taskRef(requireUid(), taskId)); }
+export async function deleteTask(taskId: string, occurrenceDueDate?: string) {
+  const uid = requireUid();
+  if (!occurrenceDueDate) { await remove(taskRef(uid, taskId)); return; }
+  await runTransaction(taskRef(uid, taskId), (current: Task | null) => {
+    if (!current) return current;
+    const key = occurrenceKey(occurrenceDueDate);
+    if (current.occurrenceStates?.[key]?.status === 'Completed' || (current.occurrenceStates?.[key]?.status === 'Pending' && !isOccurrence(current, occurrenceDueDate))) {
+      return { ...current, occurrenceStates: { ...current.occurrenceStates, [key]: { due_date: occurrenceDueDate, status: 'Skipped' } } };
+    }
+    if (!isOccurrence(current, occurrenceDueDate)) return current;
+    if (new Date(occurrenceDueDate) <= new Date(current.due_date) && !Object.values(current.occurrenceStates || {}).some(s => s.status === 'Completed')) return null;
+    return { ...current, recurrenceUntil: occurrenceDueDate };
+  });
+}
 export async function reorderTasks(orderedIds: string[]) {
   const updates: Record<string, number> = {};
   orderedIds.forEach((id, index) => { updates[`${id}/order`] = index; });

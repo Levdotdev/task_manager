@@ -2,7 +2,7 @@
   <ion-page>
     <ion-header class="app-header ion-no-border">
       <ion-toolbar>
-        <div class="header-brand" slot="start"><span class="brand-mark"><ion-icon :icon="layersOutline" aria-hidden="true" /></span><div><strong>OJT Task Manager</strong><small>A little progress, every day.</small></div></div>
+        <div class="header-brand" slot="start"><span class="brand-mark"><AppLogo /></span><div><strong>OJT Task Manager</strong><small>A little progress, every day.</small></div></div>
         <div slot="end" class="toolbar-end"><FirebaseConnectionComponent /><DarkModeToggle /><span class="toolbar-divider" /><UserMenuComponent /></div>
       </ion-toolbar>
     </ion-header>
@@ -12,8 +12,8 @@
   </ion-page>
 </template>
 <script setup lang="ts">
-import { IonPage, IonHeader, IonToolbar, IonContent, IonIcon } from '@ionic/vue';
-import { layersOutline } from 'ionicons/icons';
+import AppLogo from '@/components/AppLogo.vue';
+import { IonPage, IonHeader, IonToolbar, IonContent } from '@ionic/vue';
 import FirebaseConnectionComponent from '@/components/FirebaseConnectionComponent.vue';
 import UserMenuComponent from '@/components/UserMenuComponent.vue';
 import DarkModeToggle from '@/components/DarkModeToggle.vue';

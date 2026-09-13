@@ -5,14 +5,14 @@ An Ionic Vue task manager with Google sign-in, Firebase Realtime Database, train
 ## Tasks
 
 - Create, edit, complete, revert, and delete tasks with a title, notes, due time, and priority.
-- Create categories as you type, and reuse existing categories.
+- Choose 💼 Work, 👤 Personal, 📚 Study, 🛒 Errands, 💰 Finance, or 📁 Projects. Custom categories and previously saved categories remain available.
 - Attach multiple files and multiple links with editable titles. Existing single-file and single-link tasks remain readable and migrate when edited.
-- Choose daily, weekday, weekly, or monthly repeats. Completing an occurrence keeps its history and creates the next upcoming occurrence with its notes, category, files, links, and reminders. Late completion skips elapsed occurrences. Monthly repeats keep the original day where possible: January 31 → February 28 → March 31.
-- Reverting a completed occurrence keeps its already-created next occurrence. Deleting the pending next occurrence stops the series.
+- Choose daily, weekday, weekly, or monthly repeats. Dates appear automatically from the selected start date without completing earlier occurrences. Completing or reverting a date updates only that date; other dates stay unchanged. Monthly repeats keep the original day where possible: January 31 → February 28 → March 31.
+- Editing a recurring task updates its schedule. Deleting a pending date stops that date and later repeats, retaining earlier dates and completed history. Deleting a completed date removes only that date. Existing completion-created recurring tasks remain compatible.
 - Search titles, notes, categories, filenames, link titles, and URLs. Every search word must match somewhere in the task.
 - Combine status, category, priority, and repeat filters. Search and filters apply to both list and calendar views.
-- Browse a monthly calendar, see task counts and previews, select a date for its tasks, or add a task on that date. The calendar shows saved occurrences; the next recurring occurrence appears after completion.
-- Sort by date or priority, or select **Your order** to drag cards by their handles. Arrow buttons offer keyboard and touch alternatives. Ordering persists per user; tasks hidden by filters retain their positions.
+- Browse a monthly calendar, see task counts and previews, select a date for its tasks, or add a task on that date. Every month expands its recurring dates automatically. The list shows the next 30 days of repeats alongside saved tasks and completed history.
+- Sort by date or priority, or select **Your order** to drag cards by their handles. This view shows each recurring schedule once; Calendar shows every date. Arrow buttons offer keyboard and touch alternatives. Ordering persists per user; tasks hidden by filters retain their positions.
 
 Attachments currently use the existing database-backed data-URL storage: 5 MB per new file, 10 MB combined files and photo per task. Download links retain the original filenames.
 
@@ -26,9 +26,11 @@ The app reconciles local schedules on task updates, app resume, and foreground d
 
 An offline launch preserves the signed-in account’s existing device schedules until tasks load. Startup notification taps wait for authentication and task data. A tap received while a task form or confirmation is open waits for that dialog to close.
 
-Only future reminders are scheduled. iOS schedules the nearest reminders within a 64-notification pending window, reserving room for other notifications; later reminders refill as the app is reopened. Android uses a 500-reminder window. Changes made on another device are reflected in this device’s local schedules when this app next loads/syncs the tasks. Due dates and repeat times follow the device’s local clock, matching the existing task date format.
+Only future reminders are scheduled. Recurring dates are expanded over the coming year before the nearest reminders are selected; completing an earlier date is not required. iOS schedules the nearest reminders within a 64-notification pending window, reserving room for other notifications; later reminders refill as the app is reopened. Android uses a 500-reminder window. Changes made on another device are reflected in this device’s local schedules when this app next loads/syncs the tasks. Due dates and repeat times follow the device’s local clock, matching the existing task date format.
 
 ## Development
+
+Dark mode uses neutral charcoal surfaces and muted blue accents. Browser, home-screen, Android adaptive/legacy, and iOS app icons use the custom calendar/checkmark artwork in `resources/icon.svg`. Native splash screens use the same artwork. `python scripts/generate-icons.py` rebuilds the committed browser/iOS PNGs with Pillow.
 
 ```sh
 npm ci

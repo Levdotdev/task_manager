@@ -3,7 +3,7 @@
     <ion-router-outlet v-if="user" />
     <main v-else class="login-page">
       <section class="login-story">
-        <div class="brand"><span class="brand-mark"><ion-icon :icon="layersOutline" aria-hidden="true" /></span><span>OJT Task Manager</span></div>
+        <div class="brand"><span class="brand-mark"><AppLogo /></span><span>OJT Task Manager</span></div>
         <div class="story-content">
           <p class="eyebrow">Make every day count</p>
           <h1>A little focus.<br />A lot of progress.</h1>
@@ -52,9 +52,10 @@
 </template>
 
 <script setup lang="ts">
+import AppLogo from './components/AppLogo.vue';
 import { ref, onMounted, onUnmounted } from 'vue';
 import { IonApp, IonRouterOutlet, IonIcon, IonSpinner } from '@ionic/vue';
-import { layersOutline, leafOutline, arrowForwardOutline, checkmarkOutline, checkmarkCircleOutline, sparklesOutline, checkboxOutline, timeOutline, attachOutline, lockClosedOutline } from 'ionicons/icons';
+import { leafOutline, arrowForwardOutline, checkmarkOutline, checkmarkCircleOutline, sparklesOutline, checkboxOutline, timeOutline, attachOutline, lockClosedOutline } from 'ionicons/icons';
 import { onAuthChange, signInWithGoogle } from '@/services/userService';
 import type { User } from 'firebase/auth';
 import DarkModeToggle from '@/components/DarkModeToggle.vue';
