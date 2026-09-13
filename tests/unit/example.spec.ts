@@ -93,4 +93,20 @@ describe('Google sign-in', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('Allow pop-ups');
     expect(wrapper.get<HTMLButtonElement>('.google-button').element.disabled).toBe(false);
   });
+  test.each([
+    ['SIGN_IN_CANCELED', 'Sign-in was closed'],
+    ['NO_CREDENTIAL_AVAILABLE', 'Add a Google account'],
+    ['PROVIDER_CONFIGURATION_ERROR', 'Google Play services'],
+    ['auth/native-not-configured', 'install a configured build'],
+  ])('explains Android sign-in error %s and allows retry', async (code, message) => {
+    mocks.signIn.mockRejectedValueOnce({ code });
+    const wrapper = mount(App, { global: { stubs } });
+    await wrapper.get('.google-button').trigger('click'); await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain(message);
+    expect(wrapper.get<HTMLButtonElement>('.google-button').element.disabled).toBe(false);
+    await wrapper.get('.google-button').trigger('click'); await flushPromises();
+    expect(mocks.signIn).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
 });

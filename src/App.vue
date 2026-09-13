@@ -55,6 +55,7 @@
 import AppLogo from './components/AppLogo.vue';
 import { ref, onMounted, onUnmounted } from 'vue';
 import { IonApp, IonRouterOutlet, IonIcon, IonSpinner } from '@ionic/vue';
+import { ErrorCode as GoogleSignInErrorCode } from '@capawesome/capacitor-google-sign-in';
 import { leafOutline, arrowForwardOutline, checkmarkOutline, checkmarkCircleOutline, sparklesOutline, checkboxOutline, timeOutline, attachOutline, lockClosedOutline } from 'ionicons/icons';
 import { onAuthChange, signInWithGoogle } from '@/services/userService';
 import type { User } from 'firebase/auth';
@@ -76,8 +77,11 @@ async function handleSignIn() {
   try { await signInWithGoogle(); }
   catch (error) {
     const code = (error as { code?: string }).code;
-    if (code === 'auth/popup-closed-by-user') signInError.value = 'Sign-in was closed. You can try again when you’re ready.';
+    if (code === 'auth/popup-closed-by-user' || code === GoogleSignInErrorCode.SignInCanceled) signInError.value = 'Sign-in was closed. You can try again when you’re ready.';
     else if (code === 'auth/popup-blocked') signInError.value = 'Allow pop-ups for this page, then try signing in again.';
+    else if (code === 'auth/native-not-configured') signInError.value = 'Google sign-in is not set up in this app version. Please install a configured build.';
+    else if (code === GoogleSignInErrorCode.NoCredentialAvailable) signInError.value = 'Add a Google account in your Android settings, then try again.';
+    else if (code === GoogleSignInErrorCode.ProviderConfigurationError) signInError.value = 'Google sign-in is unavailable. Check that Google Play services is enabled and up to date, then try again.';
     else signInError.value = 'We couldn’t sign you in. Check your connection and try again.';
   } finally { signingIn.value = false; }
 }
