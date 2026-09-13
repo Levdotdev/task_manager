@@ -41,23 +41,24 @@
     </section>
     <p class="workspace-footer"><ion-icon :icon="leafOutline" aria-hidden="true" />Small steps still move you forward.</p>
   </section>
-  <AppDialog :is-open="modalTask !== null" :title="modalTask === 'new' ? 'A new task, a fresh start.' : 'Make a few adjustments.'" :description="modalTask === 'new' ? 'Add the details now. Your future self will thank you.' : 'Update the details and keep your plans on track.'" :icon="createOutline" :busy="formSaving" wide hide-footer @dismiss="closeTaskForm"><TaskFormComponent :task="modalTask === 'new' ? null : modalTask" :categories="categories" :default-due-date="defaultDueDate" @task-saved="modalTask = null" @saving-change="formSaving = $event" @cancel="closeTaskForm" /></AppDialog>
-  <AppDialog :is-open="confirmation !== null" :title="confirmationDetails.title" :description="confirmationDetails.description" :icon="confirmationDetails.icon" :confirm-label="confirmationDetails.label" :busy="actionBusy" busy-label="Working…" :danger="confirmation?.action === 'delete'" @dismiss="closeConfirmation" @confirm="confirmAction"><div v-if="confirmation" class="confirmation-task"><ion-icon :icon="documentTextOutline" aria-hidden="true" /><strong>{{ confirmation.task.title }}</strong></div><p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p></AppDialog>
+  <AppDialog :is-open="modalTask !== null" :title="modalTask === 'new' ? 'A new task, a fresh start.' : 'Make a few adjustments.'" :description="modalTask === 'new' ? 'Add the details now. Your future self will thank you.' : 'Update the details and keep your plans on track.'" :icon="createOutline" :busy="formSaving" wide hide-footer @dismiss="closeTaskForm" @closed="taskDialogActive = false"><TaskFormComponent :key="modalTask === 'new' ? 'new' : modalTask?.id" :task="modalTask === 'new' ? null : modalTask" :categories="categories" :default-due-date="defaultDueDate" @task-saved="modalTask = null" @saving-change="formSaving = $event" @cancel="closeTaskForm" /></AppDialog>
+  <AppDialog :is-open="confirmation !== null" :title="confirmationDetails.title" :description="confirmationDetails.description" :icon="confirmationDetails.icon" :confirm-label="confirmationDetails.label" :busy="actionBusy" busy-label="Working…" :danger="confirmation?.action === 'delete'" @dismiss="closeConfirmation" @closed="confirmationDialogActive = false" @confirm="confirmAction"><div v-if="confirmation" class="confirmation-task"><ion-icon :icon="documentTextOutline" aria-hidden="true" /><strong>{{ confirmation.task.title }}</strong></div><p v-if="actionError" class="form-error" role="alert">{{ actionError }}</p></AppDialog>
 </template>
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onUnmounted } from 'vue';
 import { IonIcon } from '@ionic/vue';
 import Draggable from 'vuedraggable';
 import { addOutline, timeOutline, alertCircleOutline, checkmarkCircleOutline, createOutline, trashOutline, arrowUndoOutline, documentTextOutline, leafOutline, checkboxOutline, gridOutline, calendarOutline, searchOutline, closeOutline, reorderThreeOutline, notificationsOutline } from 'ionicons/icons';
 import { subscribeToTasks, markTaskCompleted, revertTaskToPending, deleteTask, reorderTasks } from '@/services/taskService';
 import { RECURRENCE_OPTIONS, type Task, type TaskPriority, type Recurrence } from '@/models/task';
 import { displayStatus, matchesSearch, taskDateKey, localDateKey, localDateTime, manualTaskOrder, mergeVisibleOrder } from '@/utils/tasks';
-import { reminderState, syncTaskReminders, enableDeviceReminders, openExactReminderSettings } from '@/services/reminderService';
+import { reminderState, syncTaskReminders, enableDeviceReminders, openExactReminderSettings, pendingReminderTask, consumeReminderTask } from '@/services/reminderService';
 import TaskFormComponent from './TaskFormComponent.vue';
 import TaskTile from './TaskTile.vue';
 import TaskCalendar from './TaskCalendar.vue';
 import AppDialog from './AppDialog.vue';
 const tasks = ref<Task[]>([]);
+const tasksLoaded = ref(false);
 const now = ref(new Date());
 const statuses = ['All', 'Pending', 'Missed', 'Completed'] as const;
 const filter = ref<typeof statuses[number]>('Pending');
@@ -71,6 +72,8 @@ const selectedDate = ref(localDateKey(now.value));
 const modalTask = ref<Task | 'new' | null>(null);
 const defaultDueDate = ref('');
 const formSaving = ref(false);
+const taskDialogActive = ref(false);
+const confirmationDialogActive = ref(false);
 const loadError = ref('');
 const orderError = ref('');
 const orderMessage = ref('');
@@ -151,13 +154,22 @@ async function confirmAction() {
   catch { actionError.value = 'We couldn’t update this task. Check your connection and try again.'; }
   finally { actionBusy.value = false; }
 }
-function openReminder(event: Event) { const task = tasks.value.find(t => t.id === (event as CustomEvent<string>).detail); if (task) { clearFilters(); view.value = 'list'; modalTask.value = task; } }
+watch([modalTask, confirmation], ([task, action]) => {
+  if (task !== null) taskDialogActive.value = true;
+  if (action !== null) confirmationDialogActive.value = true;
+});
+watch([tasks, tasksLoaded, pendingReminderTask, modalTask, confirmation, taskDialogActive, confirmationDialogActive], () => {
+  const taskId = pendingReminderTask.value;
+  if (!taskId || !tasksLoaded.value || modalTask.value !== null || confirmation.value !== null || taskDialogActive.value || confirmationDialogActive.value) return;
+  const task = tasks.value.find(t => t.id === taskId);
+  if (task) { clearFilters(); view.value = 'list'; modalTask.value = task; }
+  consumeReminderTask(taskId);
+}, { immediate: true });
 let reminderTimer: ReturnType<typeof setTimeout> | undefined;
 watch(tasks, updated => { if (!reminderState.native) return; clearTimeout(reminderTimer); reminderTimer = setTimeout(() => syncTaskReminders(updated), 250); });
-const unsubscribe = subscribeToTasks(updated => { tasks.value = updated; loadError.value = ''; }, () => { loadError.value = 'Your tasks couldn’t be loaded. Check your connection and reopen the app.'; });
-const clock = setInterval(() => { now.value = new Date(); if (reminderState.native) syncTaskReminders(tasks.value); }, 60_000);
-onMounted(() => window.addEventListener('task-reminder-open', openReminder));
-onUnmounted(() => { unsubscribe(); clearInterval(clock); clearTimeout(reminderTimer); window.removeEventListener('task-reminder-open', openReminder); });
+const unsubscribe = subscribeToTasks(updated => { tasks.value = updated; tasksLoaded.value = true; loadError.value = ''; }, () => { loadError.value = 'Your tasks couldn’t be loaded. Check your connection and reopen the app.'; });
+const clock = setInterval(() => { now.value = new Date(); if (reminderState.native && tasksLoaded.value) syncTaskReminders(tasks.value); }, 60_000);
+onUnmounted(() => { unsubscribe(); clearInterval(clock); clearTimeout(reminderTimer); });
 </script>
 <style scoped>
 .overview-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 30px; }

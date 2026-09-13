@@ -1,6 +1,6 @@
 <template>
   <ion-modal :is-open="isOpen" :can-dismiss="!busy" :backdrop-dismiss="!busy"
-    :class="['app-dialog', { 'app-dialog-wide': wide }]" @didDismiss="$emit('dismiss')">
+    :class="['app-dialog', { 'app-dialog-wide': wide }]" @didDismiss="onDidDismiss">
     <section class="dialog-shell" :aria-labelledby="titleId">
       <header class="dialog-header">
         <div v-if="icon" :class="['dialog-icon', { 'dialog-icon-danger': danger }]"><ion-icon :icon="icon" aria-hidden="true" /></div>
@@ -29,7 +29,8 @@ withDefaults(defineProps<{
   confirmLabel?: string; busyLabel?: string; busy?: boolean; disabled?: boolean;
   danger?: boolean; wide?: boolean; hideFooter?: boolean;
 }>(), { confirmLabel: 'Confirm', busyLabel: 'Saving…' });
-defineEmits<{ (e: 'dismiss'): void; (e: 'confirm'): void }>();
+const emit = defineEmits<{ (e: 'dismiss'): void; (e: 'confirm'): void; (e: 'closed'): void }>();
+function onDidDismiss() { emit('dismiss'); emit('closed'); }
 const titleId = `dialog-${useId()}`;
 </script>
 

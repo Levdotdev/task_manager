@@ -24,6 +24,8 @@ Use **Enable reminders** to allow device notifications. Android also offers **Op
 
 The app reconciles local schedules on task updates, app resume, and foreground delivery. Edits, completion, deletion, and sign-out cancel the affected reminders; signing out also clears delivered task reminders. Notifications from other plugins are preserved. Notification taps open the matching task for the signed-in user.
 
+An offline launch preserves the signed-in account’s existing device schedules until tasks load. Startup notification taps wait for authentication and task data. A tap received while a task form or confirmation is open waits for that dialog to close.
+
 Only future reminders are scheduled. iOS schedules the nearest reminders within a 64-notification pending window, reserving room for other notifications; later reminders refill as the app is reopened. Android uses a 500-reminder window. Changes made on another device are reflected in this device’s local schedules when this app next loads/syncs the tasks. Due dates and repeat times follow the device’s local clock, matching the existing task date format.
 
 ## Development
