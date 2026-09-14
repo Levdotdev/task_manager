@@ -48,7 +48,7 @@ The existing repository contains the Firebase web app settings; it does not cont
 
 1. In Firebase Console → Authentication → Sign-in method → Google → Web SDK configuration, copy the **Web client ID**. Set `VITE_GOOGLE_WEB_CLIENT_ID=123456789-abc.apps.googleusercontent.com` in `.env.local`, replacing the example with your real ID. For the GitHub APK workflow, set a repository **Actions variable** named `VITE_GOOGLE_WEB_CLIENT_ID` to that ID. The plugin receives the web client ID; the Android client ID is registered separately.
 2. In Firebase Project settings → Your apps, add/select the Android app with package name **`io.daily.taskmanager`** and add the **SHA-1 of the key signing your APK**. Enable the Google sign-in provider. Verify an Android OAuth client exists in Google Cloud → APIs & Services → Credentials with that package and SHA-1, alongside the web client. See [Firebase’s Android Google sign-in setup](https://firebase.google.com/docs/auth/android/google-signin). This plugin only obtains a Google token; it does not require the native Firebase SDK or `google-services.json`.
-3. For GitHub-built debug APKs, save the base64-encoded **same debug keystore** as an Actions **secret** named `ANDROID_DEBUG_KEYSTORE_BASE64`. The workflow restores it before Gradle runs, preserving its registered SHA-1 on every build. A fresh runner-generated debug key would invalidate the OAuth registration on the next build. The workflow uploads an **Android signing certificate** artifact containing its fingerprints. It requires both this secret and the web client ID, so it cannot silently distribute an unconfigured APK.
+3. For GitHub-built debug APKs, save the base64-encoded **same debug keystore** as an Actions **secret** named `ANDROID_DEBUG_KEYSTORE_BASE64`. The workflow restores it before Gradle runs and passes its exact path through `TASK_MANAGER_DEBUG_KEYSTORE`; Gradle explicitly uses it for debug signing. This preserves its registered SHA-1 regardless of the runner's default Android keystore location. After building, `apksigner` verifies the finished APK and compares its signing fingerprint with the supplied key before APK upload. The **Android signing certificate** artifact includes both the supplied-key and finished-APK reports. The workflow requires both this secret and the web client ID.
 
 Android Studio normally creates your local debug keystore on the first debug build. Print its fingerprint with:
 
@@ -65,6 +65,8 @@ On Windows PowerShell, encode it with:
 ```
 
 Register each signing certificate you distribute: local debug, GitHub debug, and release/Google Play app signing can have different SHA-1 values. Keep the configured keystore outside git. A release upload key and Google Play app signing key can also differ.
+
+If Google closes immediately after selecting an account, confirm the Android OAuth client uses the **finished APK's** SHA-1 and `io.daily.taskmanager`, in the same project as the web client. Google Play services can report configuration failures as cancellation. Changing from an earlier APK signed with another key requires uninstalling that version before installing the corrected APK; tasks and hours already saved to Firebase remain in the same account.
 
 Build the configured Android application with:
 

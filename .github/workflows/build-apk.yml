@@ -24,6 +24,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Check APK certificate comparison
+        run: python3 -m unittest discover -s tests/native
+
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
@@ -41,18 +44,12 @@ jobs:
             echo "::error::Set the ANDROID_DEBUG_KEYSTORE_BASE64 repository secret to your registered Android debug keystore. See README.md → Android Google sign-in."
             exit 1
           fi
-          mkdir -p "$HOME/.android"
-          printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$HOME/.android/debug.keystore"
-          chmod 600 "$HOME/.android/debug.keystore"
-          keytool -list -v -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android -keypass android > Android-signing-certificate.txt
-
-      - name: Upload signing certificate information
-        uses: actions/upload-artifact@v4
-        with:
-          name: Android signing certificate
-          path: Android-signing-certificate.txt
-          if-no-files-found: error
-          retention-days: 30
+          task_manager_key_path="$RUNNER_TEMP/task-manager-signing/debug.keystore"
+          mkdir -p "$(dirname "$task_manager_key_path")"
+          printf '%s' "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 --decode > "$task_manager_key_path"
+          chmod 600 "$task_manager_key_path"
+          keytool -J-Duser.language=en -list -v -keystore "$task_manager_key_path" -alias androiddebugkey -storepass android -keypass android > Android-signing-certificate.txt
+          printf 'TASK_MANAGER_DEBUG_KEYSTORE=%s\n' "$task_manager_key_path" >> "$GITHUB_ENV"
 
       - name: Build web application and sync Capacitor Android
         run: npm run build:android
@@ -62,6 +59,18 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
+
+      - name: Verify APK uses the configured signing certificate
+        run: python3 scripts/verify-apk-signing.py android/app/build/outputs/apk/debug/app-debug.apk Android-signing-certificate.txt
+
+      - name: Upload signing certificate information
+        if: ${{ !cancelled() && steps.signing.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android signing certificate
+          path: Android-signing-certificate.txt
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Rename APK
         run: cp android/app/build/outputs/apk/debug/app-debug.apk TaskManager.apk

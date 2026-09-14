@@ -27,6 +27,7 @@ npm-debug.log*
 /coverage
 /dist
 /node_modules
+__pycache__/
 /.env.local
 /.env.*.local
 /platforms
