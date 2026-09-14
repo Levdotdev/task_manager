@@ -12,7 +12,10 @@ def require_matching_certificate(key_report: str, apk_report: str) -> str:
     expected = re.findall(r"^\s*SHA1:\s*((?:[0-9a-f]{2}:){19}[0-9a-f]{2})\s*$", key_report, re.I | re.M)
     if len(expected) != 1:
         raise ValueError("The configured keystore report must contain exactly one SHA-1 fingerprint.")
-    actual = re.findall(r"^Signer #\d+ certificate SHA-1 digest:\s*([0-9a-f]{40})\s*$", apk_report, re.I | re.M)
+    actual = re.findall(
+        r"^(?:Signer #\d+|V\d+(?:\.\d+)? Signer:) certificate SHA-1 digest:\s*([0-9a-f]{40})\s*$",
+        apk_report, re.I | re.M,
+    )
     wanted = expected[0].replace(":", "").lower()
     if [value.lower() for value in actual] != [wanted]:
         got = ", ".join(actual) or "no signing certificate"
