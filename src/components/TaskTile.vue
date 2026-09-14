@@ -9,8 +9,10 @@
       <p class="task-due" :class="{ overdue: displayStatus === 'Missed' }"><ion-icon :icon="calendarOutline" aria-hidden="true" /><time :datetime="task.due_date">{{ formattedDue }}</time></p>
       <div v-if="links.length || files.length" class="attachments">
         <a v-for="link in links" :key="link.id" :href="safeLink(link.url)" :title="link.url" target="_blank" rel="noopener noreferrer" class="attachment-link"><ion-icon :icon="linkOutline" aria-hidden="true" /><span>{{ link.title || link.url }}</span><ion-icon :icon="arrowUpRight" aria-hidden="true" /></a>
-        <a v-for="file in files" :key="file.id" :href="file.data" :download="file.name" class="attachment-link"><ion-icon :icon="documentAttachOutline" aria-hidden="true" /><span>{{ file.name }}</span></a>
+        <button v-for="file in files" :key="file.id" type="button" class="attachment-link" :disabled="downloadingFile !== null" :aria-label="`Download ${file.name}`" :aria-busy="downloadingFile === file.id" @click="downloadAttachment(file)"><ion-icon :icon="documentAttachOutline" aria-hidden="true" /><span>{{ downloadingFile === file.id ? 'Saving…' : file.name }}</span></button>
       </div>
+      <p v-if="downloadMessage" class="attachment-message" role="status">{{ downloadMessage }}</p>
+      <p v-if="downloadError" class="attachment-message attachment-error" role="alert">{{ downloadError }}</p>
       <div v-if="manualOrder" class="order-controls"><button class="drag-handle" type="button" :disabled="busy" :aria-label="`Drag to reorder ${task.title}`" title="Drag to reorder"><ion-icon :icon="reorderThreeOutline" aria-hidden="true" />Drag to reorder</button><button type="button" :disabled="busy || !canMoveUp" :aria-label="`Move ${task.title} earlier`" @click="$emit('move', -1)"><ion-icon :icon="arrowUpOutline" aria-hidden="true" /></button><button type="button" :disabled="busy || !canMoveDown" :aria-label="`Move ${task.title} later`" @click="$emit('move', 1)"><ion-icon :icon="arrowDownOutline" aria-hidden="true" /></button></div>
       <div class="tile-actions">
         <button v-if="task.status === 'Completed'" type="button" class="task-action" @click="$emit('revert')"><ion-icon :icon="arrowUndoOutline" aria-hidden="true" />Revert</button>
@@ -24,13 +26,31 @@
   </article>
 </template>
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { IonIcon } from '@ionic/vue';
 import { createOutline, trashOutline, checkmarkOutline, arrowUndoOutline, linkOutline, documentAttachOutline, calendarOutline, arrowForwardOutline, repeatOutline, notificationsOutline, reorderThreeOutline, arrowUpOutline, arrowDownOutline } from 'ionicons/icons';
-import { REMINDER_OPTIONS, type Task } from '@/models/task';
+import { REMINDER_OPTIONS, type Task, type TaskFile } from '@/models/task';
+import { saveTaskAttachment } from '@/services/attachmentService';
 import { categoryLabel, taskFiles, taskLinks, recurrenceLabel, displayStatus as getDisplayStatus } from '@/utils/tasks';
 const props = defineProps<{ task: Task; now?: Date; manualOrder?: boolean; canMoveUp?: boolean; canMoveDown?: boolean; busy?: boolean }>();
 defineEmits<{ (e: 'edit'): void; (e: 'delete'): void; (e: 'complete'): void; (e: 'revert'): void; (e: 'move', direction: number): void }>();
+const downloadingFile = ref<string | null>(null);
+const downloadMessage = ref('');
+const downloadError = ref('');
+async function downloadAttachment(file: TaskFile) {
+  if (downloadingFile.value !== null) return;
+  downloadingFile.value = file.id;
+  downloadMessage.value = '';
+  downloadError.value = '';
+  try {
+    const result = await saveTaskAttachment(file);
+    downloadMessage.value = result === 'saved' ? 'File saved.' : result === 'started' ? 'Download started.' : '';
+  } catch (error) {
+    downloadError.value = error instanceof Error ? error.message : 'We couldn’t save this attachment. Try again.';
+  } finally {
+    downloadingFile.value = null;
+  }
+}
 const arrowUpRight = arrowForwardOutline;
 const displayStatus = computed(() => getDisplayStatus(props.task, props.now));
 const files = computed(() => taskFiles(props.task));
@@ -65,10 +85,13 @@ const formattedDue = computed(() => new Date(props.task.due_date).toLocaleString
 .task-due ion-icon { flex-shrink: 0; font-size: 15px; }
 .task-due.overdue { color: var(--app-danger-text); }
 .attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.attachment-link { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 8px; border-radius: 7px; color: var(--app-muted); background: var(--app-bg); font-size: 11px; text-decoration: none; }
+.attachment-link { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 8px; border-radius: 7px; color: var(--app-muted); background: var(--app-bg); font-size: 11px; text-decoration: none; border: 0; font-family: inherit; text-align: left; cursor: pointer; }
 .attachment-link span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .attachment-link ion-icon { flex-shrink: 0; font-size: 13px; }
 .attachment-link:hover { color: var(--ion-color-primary); }
+.attachment-link:disabled { opacity: .65; cursor: wait; }
+.attachment-message { margin: 0 0 16px; color: var(--app-muted); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.attachment-error { color: var(--app-danger-text); }
 .tile-actions { display: flex; gap: 8px; padding-top: 15px; border-top: 1px solid var(--app-line); }
 .task-action { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 9px 12px; border: 1px solid var(--app-line); border-radius: 9px; color: var(--app-muted); background: transparent; font-size: 12px; font-weight: 600; }
 .task-action:hover { background: var(--app-surface-alt); color: var(--app-text); }

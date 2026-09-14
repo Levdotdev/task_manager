@@ -24,6 +24,11 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Lint and run unit tests
+        run: |
+          npm run lint
+          npm run test:unit -- --run
+
       - name: Check APK certificate comparison
         run: python3 -m unittest discover -s tests/native
 

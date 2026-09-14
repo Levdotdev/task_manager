@@ -14,7 +14,9 @@ An Ionic Vue task manager with Google sign-in, Firebase Realtime Database, train
 - Browse a monthly calendar, see task counts and previews, select a date for its tasks, or add a task on that date. Every month expands its recurring dates automatically. The list shows the next 30 days of repeats alongside saved tasks and completed history.
 - Sort by date or priority, or select **Your order** to drag cards by their handles. This view shows each recurring schedule once; Calendar shows every date. Arrow buttons offer keyboard and touch alternatives. Ordering persists per user; tasks hidden by filters retain their positions.
 
-Attachments currently use the existing database-backed data-URL storage: 5 MB per new file, 10 MB combined files and photo per task. Download links retain the original filenames.
+Attachments use the existing database-backed data-URL storage: 5 MB per new file, 10 MB combined files and photo per task. On Android, tap an attached filename to open the system Save file picker, choose Downloads or another folder, then confirm Save. Existing single-file tasks use the same action. Browser downloads retain the original filenames. Canceling the picker leaves the attachment unchanged and allows retry; failed saves show a message and allow another attempt.
+
+Android file saving is a local Capacitor plugin included in the app. Rebuild and install the updated APK to use it; updating hosted web files alone cannot add it to an installed application.
 
 ## Device reminders
 
@@ -89,4 +91,4 @@ npx cap open ios
 
 Both native projects include the local-notification plugin. Android includes notification and precise-alarm permissions and a monochrome notification icon. iOS uses Swift Package Manager and includes camera/photo usage descriptions for task photos. Build Android with the Java 21 toolchain required by this Capacitor version; build and sign iOS with Xcode on macOS.
 
-Unit tests cover legacy task compatibility, every search field, recurrence and month-end behavior, repeat write retries/recovery, ordering, multiple attachments, native notification reconciliation, and Android native token exchange/cancellation/sign-out using plugin/database mocks. Native notification delivery and Google sign-in still require configured Android/iOS device testing.
+Unit tests cover legacy task compatibility, every search field, recurrence and month-end behavior, repeat write retries/recovery, ordering, multiple attachments, native notification reconciliation, and Android native token exchange/cancellation/sign-out using plugin/database mocks. Attachment tests cover native payloads, legacy files, browser downloads, cancellation, concurrent requests, failure recovery, and task-card messages using plugin mocks. Native file picker delivery, notification delivery, and Google sign-in still require configured device testing.
